@@ -19,8 +19,6 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
 app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json({ limit: '2mb' }));
 
-mongoose.set('sanitizeFilter', true);
-
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1200,
@@ -171,6 +169,7 @@ const ensureDbConnection = async () => {
 
   await mongoose.connect(MONGODB_URI, {
     dbName: MONGODB_DB_NAME,
+    sanitizeFilter: true,
   });
 };
 
@@ -207,6 +206,10 @@ const calculateMetrics = (entry) => {
     lossPct: Number(lossPct.toFixed(2)),
     downtimePct: Number(downtimePct.toFixed(2)),
   };
+};
+
+const normalizeHourlyInputs = (values = []) => {
+  return [...values.map((n) => Number(n || 0)), ...Array(12).fill(0)].slice(0, 12);
 };
 
 const recordAudit = async (actorId, action, entity, entityId, metadata = {}) => {
@@ -397,7 +400,8 @@ app.get('/api/master/:kind', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Invalid master kind.' });
   }
 
-  const query = { kind };
+  const safeKind = MASTER_KINDS.find((item) => item === kind);
+  const query = { kind: safeKind };
   if (active !== undefined) query.active = active === 'true';
 
   if (lineId) {
@@ -444,7 +448,7 @@ app.post('/api/master/:kind', authMiddleware, requireRole('admin'), async (req, 
     }
 
     const row = await MasterItem.create({
-      kind,
+      kind: MASTER_KINDS.find((item) => item === kind),
       name,
       code,
       active,
@@ -532,7 +536,7 @@ app.get('/api/entries', authMiddleware, async (req, res) => {
 
   if (date) {
     if (!isValidDateString(date)) return res.status(400).json({ error: 'Invalid date.' });
-    query.date = date;
+    query.date = new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10);
   }
 
   const idFilters = { shiftId, operatorId, machineId, departmentId, lineId };
@@ -547,11 +551,11 @@ app.get('/api/entries', authMiddleware, async (req, res) => {
     query.date = {};
     if (from) {
       if (!isValidDateString(from)) return res.status(400).json({ error: 'Invalid from date.' });
-      query.date.$gte = from;
+      query.date.$gte = new Date(`${from}T00:00:00.000Z`).toISOString().slice(0, 10);
     }
     if (to) {
       if (!isValidDateString(to)) return res.status(400).json({ error: 'Invalid to date.' });
-      query.date.$lte = to;
+      query.date.$lte = new Date(`${to}T00:00:00.000Z`).toISOString().slice(0, 10);
     }
   }
 
@@ -622,7 +626,7 @@ app.post('/api/entries', authMiddleware, requireRole('admin', 'supervisor', 'ope
     operatorId: payload.operatorId,
     productId: payload.productId,
     plannedQty: Number(payload.plannedQty),
-    hourlyInputs: payload.hourlyInputs.map((n) => Number(n || 0)).slice(0, 12).concat(Array(12).fill(0)).slice(0, 12),
+    hourlyInputs: normalizeHourlyInputs(payload.hourlyInputs),
     rejectQty: Number(payload.rejectQty || 0),
     reworkQty: Number(payload.reworkQty || 0),
     downtimeMinutes: Number(payload.downtimeMinutes || 0),
@@ -681,7 +685,7 @@ app.put('/api/entries/:id', authMiddleware, requireRole('admin', 'supervisor', '
     if (req.body[field] !== undefined) {
       const oldValue = entry[field];
       const newValue = field === 'hourlyInputs'
-        ? req.body[field].map((n) => Number(n || 0)).slice(0, 12).concat(Array(12).fill(0)).slice(0, 12)
+        ? normalizeHourlyInputs(req.body[field])
         : req.body[field];
 
       const changed = JSON.stringify(oldValue) !== JSON.stringify(newValue);
@@ -760,18 +764,22 @@ app.post('/api/entries/clone-previous', authMiddleware, requireRole('admin', 'su
     return res.status(400).json({ error: 'Invalid date.' });
   }
 
-  if (lineId && !asObjectIdOrNull(lineId)) return res.status(400).json({ error: 'Invalid lineId.' });
-  if (machineId && !asObjectIdOrNull(machineId)) return res.status(400).json({ error: 'Invalid machineId.' });
-  if (shiftId && !asObjectIdOrNull(shiftId)) return res.status(400).json({ error: 'Invalid shiftId.' });
+  const sanitizedLineId = lineId ? asObjectIdOrNull(lineId) : null;
+  const sanitizedMachineId = machineId ? asObjectIdOrNull(machineId) : null;
+  const sanitizedShiftId = shiftId ? asObjectIdOrNull(shiftId) : null;
+
+  if (lineId && !sanitizedLineId) return res.status(400).json({ error: 'Invalid lineId.' });
+  if (machineId && !sanitizedMachineId) return res.status(400).json({ error: 'Invalid machineId.' });
+  if (shiftId && !sanitizedShiftId) return res.status(400).json({ error: 'Invalid shiftId.' });
 
   const current = new Date(date);
   current.setDate(current.getDate() - 1);
   const previousDate = current.toISOString().slice(0, 10);
 
   const query = { date: previousDate };
-  if (lineId) query.lineId = lineId;
-  if (machineId) query.machineId = machineId;
-  if (shiftId) query.shiftId = shiftId;
+  if (sanitizedLineId) query.lineId = sanitizedLineId;
+  if (sanitizedMachineId) query.machineId = sanitizedMachineId;
+  if (sanitizedShiftId) query.shiftId = sanitizedShiftId;
 
   if (req.user.role === 'operator') {
     query.createdBy = req.user._id;
@@ -834,7 +842,7 @@ app.get('/api/reports', authMiddleware, async (req, res) => {
   const query = {};
   if (date) {
     if (!isValidDateString(date)) return res.status(400).json({ error: 'Invalid date.' });
-    query.date = date;
+    query.date = new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10);
   }
 
   const reportIdFilters = { shiftId, operatorId, machineId, departmentId, lineId };
@@ -849,11 +857,11 @@ app.get('/api/reports', authMiddleware, async (req, res) => {
     query.date = {};
     if (from) {
       if (!isValidDateString(from)) return res.status(400).json({ error: 'Invalid from date.' });
-      query.date.$gte = from;
+      query.date.$gte = new Date(`${from}T00:00:00.000Z`).toISOString().slice(0, 10);
     }
     if (to) {
       if (!isValidDateString(to)) return res.status(400).json({ error: 'Invalid to date.' });
-      query.date.$lte = to;
+      query.date.$lte = new Date(`${to}T00:00:00.000Z`).toISOString().slice(0, 10);
     }
   }
 

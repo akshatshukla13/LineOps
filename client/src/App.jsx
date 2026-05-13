@@ -18,7 +18,12 @@ import ExcelJS from 'exceljs'
 const TOKEN_KEY = 'lineops_token'
 const USER_KEY = 'lineops_user'
 const THEME_KEY = 'lineops_theme'
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:5000')
+
+if (!API_BASE_URL) {
+  throw new Error('VITE_API_BASE_URL is required in production builds')
+}
 
 const masterKinds = [
   'shift',
