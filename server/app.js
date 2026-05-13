@@ -12,9 +12,10 @@ const PORT = Number(process.env.PORT || 5000);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const MONGODB_URI = process.env.MONGODB_URI;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'lineops';
-const JWT_SECRET = process.env.JWT_SECRET || 'lineops-dev-secret';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const JWT_SECRET = process.env.JWT_SECRET || (IS_PRODUCTION ? '' : 'lineops-dev-secret');
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (IS_PRODUCTION ? '' : 'Admin@123');
 
 app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json({ limit: '2mb' }));
@@ -161,6 +162,14 @@ const User = mongoose.model('User', userSchema);
 const MasterItem = mongoose.model('MasterItem', masterItemSchema);
 const ProductionEntry = mongoose.model('ProductionEntry', productionEntrySchema);
 const AuditLog = mongoose.model('AuditLog', auditLogSchema);
+
+if (IS_PRODUCTION && !JWT_SECRET) {
+  throw new Error('JWT_SECRET is required in production.');
+}
+
+if (IS_PRODUCTION && !ADMIN_PASSWORD) {
+  throw new Error('ADMIN_PASSWORD is required in production.');
+}
 
 const ensureDbConnection = async () => {
   if (!MONGODB_URI) {
