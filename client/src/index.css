@@ -1,53 +1,29 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
 
 :root {
-  font-family: 'Space Grotesk', sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.92);
-  background-color: #0f1014;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 body {
   margin: 0;
-  min-width: 320px;
   min-height: 100vh;
-  background: radial-gradient(circle at top left, #1b2537 0%, #0f1014 55%);
 }
 
-a {
-  font-weight: 500;
-  color: inherit;
-  text-decoration: none;
+.input,
+.select,
+.textarea {
+  @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50;
 }
 
-h1 {
-  font-size: clamp(2rem, 3vw, 3rem);
-  line-height: 1.1;
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700;
 }
 
-button {
-  border-radius: 999px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.4em;
-  font-size: 1em;
-  font-weight: 600;
-  font-family: inherit;
-  background-color: #10141f;
-  color: inherit;
-  cursor: pointer;
-  transition: border-color 0.25s, transform 0.25s;
+.btn-muted {
+  @apply inline-flex items-center justify-center rounded-md bg-slate-200 px-3 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700;
 }
 
-button:hover {
-  border-color: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
+.card {
+  @apply rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950;
 }
