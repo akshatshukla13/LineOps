@@ -4,6 +4,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 
@@ -18,11 +19,49 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
 app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json({ limit: '2mb' }));
 
+mongoose.set('sanitizeFilter', true);
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1200,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api', apiLimiter);
+
 const roleHierarchy = {
   admin: 3,
   supervisor: 2,
   operator: 1,
 };
+
+const MASTER_KINDS = [
+  'shift',
+  'department',
+  'line',
+  'machine',
+  'process',
+  'operator',
+  'product',
+  'defectType',
+  'downtimeReason',
+];
+
+const MASTER_KIND_SET = new Set(MASTER_KINDS);
+const DATE_STRING_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+const isValidObjectId = (value) => mongoose.isValidObjectId(value);
+const asObjectIdOrNull = (value) => (value && isValidObjectId(value) ? value : null);
+const isValidDateString = (value) => DATE_STRING_REGEX.test(String(value || ''));
+const isValidMasterKind = (value) => MASTER_KIND_SET.has(value);
 
 const userSchema = new mongoose.Schema(
   {
@@ -42,17 +81,7 @@ const masterItemSchema = new mongoose.Schema(
   {
     kind: {
       type: String,
-      enum: [
-        'shift',
-        'department',
-        'line',
-        'machine',
-        'process',
-        'operator',
-        'product',
-        'defectType',
-        'downtimeReason',
-      ],
+      enum: MASTER_KINDS,
       required: true,
     },
     name: { type: String, required: true, trim: true },
@@ -242,7 +271,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {};
 
   if (!username || !password) {
@@ -317,6 +346,10 @@ app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req, res)
   const { id } = req.params;
   const { fullName, employeeId, role, assignedDepartment, assignedLines, status } = req.body || {};
 
+  if (!isValidObjectId(id)) {
+    return res.status(400).json({ error: 'Invalid user id.' });
+  }
+
   const user = await User.findById(id);
   if (!user) {
     return res.status(404).json({ error: 'User not found.' });
@@ -337,6 +370,10 @@ app.put('/api/users/:id', authMiddleware, requireRole('admin'), async (req, res)
 app.post('/api/users/:id/reset-password', authMiddleware, requireRole('admin'), async (req, res) => {
   const { id } = req.params;
   const { password } = req.body || {};
+
+  if (!isValidObjectId(id)) {
+    return res.status(400).json({ error: 'Invalid user id.' });
+  }
   if (!password || String(password).length < 6) {
     return res.status(400).json({ error: 'Password must be at least 6 characters.' });
   }
@@ -356,11 +393,30 @@ app.get('/api/master/:kind', authMiddleware, async (req, res) => {
   const { kind } = req.params;
   const { active, lineId, machineId, departmentId } = req.query;
 
+  if (!isValidMasterKind(kind)) {
+    return res.status(400).json({ error: 'Invalid master kind.' });
+  }
+
   const query = { kind };
   if (active !== undefined) query.active = active === 'true';
-  if (lineId) query.lineId = lineId;
-  if (machineId) query.machineId = machineId;
-  if (departmentId) query.departmentId = departmentId;
+
+  if (lineId) {
+    const sanitizedLineId = asObjectIdOrNull(lineId);
+    if (!sanitizedLineId) return res.status(400).json({ error: 'Invalid lineId.' });
+    query.lineId = sanitizedLineId;
+  }
+
+  if (machineId) {
+    const sanitizedMachineId = asObjectIdOrNull(machineId);
+    if (!sanitizedMachineId) return res.status(400).json({ error: 'Invalid machineId.' });
+    query.machineId = sanitizedMachineId;
+  }
+
+  if (departmentId) {
+    const sanitizedDepartmentId = asObjectIdOrNull(departmentId);
+    if (!sanitizedDepartmentId) return res.status(400).json({ error: 'Invalid departmentId.' });
+    query.departmentId = sanitizedDepartmentId;
+  }
 
   const rows = await MasterItem.find(query).sort({ name: 1 }).lean();
   return res.json(rows);
@@ -368,6 +424,10 @@ app.get('/api/master/:kind', authMiddleware, async (req, res) => {
 
 app.post('/api/master/:kind', authMiddleware, requireRole('admin'), async (req, res) => {
   const { kind } = req.params;
+
+  if (!isValidMasterKind(kind)) {
+    return res.status(400).json({ error: 'Invalid master kind.' });
+  }
   const { name, code = '', active = true, departmentId = null, lineId = null, machineId = null } = req.body || {};
 
   if (!name) {
@@ -375,7 +435,23 @@ app.post('/api/master/:kind', authMiddleware, requireRole('admin'), async (req, 
   }
 
   try {
-    const row = await MasterItem.create({ kind, name, code, active, departmentId, lineId, machineId });
+    const sanitizedDepartmentId = departmentId ? asObjectIdOrNull(departmentId) : null;
+    const sanitizedLineId = lineId ? asObjectIdOrNull(lineId) : null;
+    const sanitizedMachineId = machineId ? asObjectIdOrNull(machineId) : null;
+
+    if ((departmentId && !sanitizedDepartmentId) || (lineId && !sanitizedLineId) || (machineId && !sanitizedMachineId)) {
+      return res.status(400).json({ error: 'Invalid parent id in master item.' });
+    }
+
+    const row = await MasterItem.create({
+      kind,
+      name,
+      code,
+      active,
+      departmentId: sanitizedDepartmentId,
+      lineId: sanitizedLineId,
+      machineId: sanitizedMachineId,
+    });
     await recordAudit(req.user._id, 'create', `master:${kind}`, row._id, { name: row.name });
     return res.status(201).json(row);
   } catch (error) {
@@ -385,6 +461,11 @@ app.post('/api/master/:kind', authMiddleware, requireRole('admin'), async (req, 
 
 app.put('/api/master/:kind/:id', authMiddleware, requireRole('admin'), async (req, res) => {
   const { kind, id } = req.params;
+
+  if (!isValidMasterKind(kind) || !isValidObjectId(id)) {
+    return res.status(400).json({ error: 'Invalid kind or id.' });
+  }
+
   const row = await MasterItem.findOne({ _id: id, kind });
   if (!row) {
     return res.status(404).json({ error: 'Master item not found.' });
@@ -404,6 +485,11 @@ app.put('/api/master/:kind/:id', authMiddleware, requireRole('admin'), async (re
 
 app.delete('/api/master/:kind/:id', authMiddleware, requireRole('admin'), async (req, res) => {
   const { kind, id } = req.params;
+
+  if (!isValidMasterKind(kind) || !isValidObjectId(id)) {
+    return res.status(400).json({ error: 'Invalid kind or id.' });
+  }
+
   const row = await MasterItem.findOneAndDelete({ _id: id, kind });
   if (!row) {
     return res.status(404).json({ error: 'Master item not found.' });
@@ -420,15 +506,15 @@ app.post('/api/master/import', authMiddleware, requireRole('admin'), async (req,
   }
 
   const prepared = rows
-    .filter((r) => r?.kind && r?.name)
+    .filter((r) => r?.kind && isValidMasterKind(r.kind) && r?.name)
     .map((r) => ({
-      kind: r.kind,
+      kind: isValidMasterKind(r.kind) ? r.kind : null,
       name: r.name,
       code: r.code || '',
       active: r.active !== false,
-      departmentId: r.departmentId || null,
-      lineId: r.lineId || null,
-      machineId: r.machineId || null,
+      departmentId: r.departmentId ? asObjectIdOrNull(r.departmentId) : null,
+      lineId: r.lineId ? asObjectIdOrNull(r.lineId) : null,
+      machineId: r.machineId ? asObjectIdOrNull(r.machineId) : null,
     }));
 
   if (!prepared.length) {
@@ -443,16 +529,30 @@ app.post('/api/master/import', authMiddleware, requireRole('admin'), async (req,
 app.get('/api/entries', authMiddleware, async (req, res) => {
   const { date, shiftId, operatorId, machineId, departmentId, from, to, lineId } = req.query;
   const query = {};
-  if (date) query.date = date;
-  if (shiftId) query.shiftId = shiftId;
-  if (operatorId) query.operatorId = operatorId;
-  if (machineId) query.machineId = machineId;
-  if (departmentId) query.departmentId = departmentId;
-  if (lineId) query.lineId = lineId;
+
+  if (date) {
+    if (!isValidDateString(date)) return res.status(400).json({ error: 'Invalid date.' });
+    query.date = date;
+  }
+
+  const idFilters = { shiftId, operatorId, machineId, departmentId, lineId };
+  for (const [field, rawValue] of Object.entries(idFilters)) {
+    if (!rawValue) continue;
+    const sanitizedId = asObjectIdOrNull(rawValue);
+    if (!sanitizedId) return res.status(400).json({ error: `Invalid ${field}.` });
+    query[field] = sanitizedId;
+  }
+
   if (from || to) {
     query.date = {};
-    if (from) query.date.$gte = from;
-    if (to) query.date.$lte = to;
+    if (from) {
+      if (!isValidDateString(from)) return res.status(400).json({ error: 'Invalid from date.' });
+      query.date.$gte = from;
+    }
+    if (to) {
+      if (!isValidDateString(to)) return res.status(400).json({ error: 'Invalid to date.' });
+      query.date.$lte = to;
+    }
   }
 
   if (req.user.role === 'operator') {
@@ -494,8 +594,22 @@ app.post('/api/entries', authMiddleware, requireRole('admin', 'supervisor', 'ope
     }
   }
 
-  if (!payload.date || !payload.plannedQty || !Array.isArray(payload.hourlyInputs)) {
+  if (!payload.date || payload.plannedQty === undefined || !Array.isArray(payload.hourlyInputs)) {
     return res.status(400).json({ error: 'date, plannedQty and hourlyInputs are required.' });
+  }
+
+  if (!isValidDateString(payload.date)) {
+    return res.status(400).json({ error: 'Invalid date.' });
+  }
+
+  for (const key of requiredIds) {
+    if (!asObjectIdOrNull(payload[key])) {
+      return res.status(400).json({ error: `Invalid ${key}.` });
+    }
+  }
+
+  if (payload.downtimeReasonId && !asObjectIdOrNull(payload.downtimeReasonId)) {
+    return res.status(400).json({ error: 'Invalid downtimeReasonId.' });
   }
 
   const entry = new ProductionEntry({
@@ -528,6 +642,10 @@ app.post('/api/entries', authMiddleware, requireRole('admin', 'supervisor', 'ope
 });
 
 app.put('/api/entries/:id', authMiddleware, requireRole('admin', 'supervisor', 'operator'), async (req, res) => {
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid entry id.' });
+  }
+
   const entry = await ProductionEntry.findById(req.params.id);
   if (!entry) {
     return res.status(404).json({ error: 'Entry not found.' });
@@ -596,6 +714,10 @@ app.put('/api/entries/:id', authMiddleware, requireRole('admin', 'supervisor', '
 });
 
 app.post('/api/entries/:id/lock', authMiddleware, requireRole('admin', 'supervisor'), async (req, res) => {
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid entry id.' });
+  }
+
   const entry = await ProductionEntry.findById(req.params.id);
   if (!entry) {
     return res.status(404).json({ error: 'Entry not found.' });
@@ -611,6 +733,10 @@ app.post('/api/entries/:id/lock', authMiddleware, requireRole('admin', 'supervis
 });
 
 app.post('/api/entries/:id/unlock', authMiddleware, requireRole('admin'), async (req, res) => {
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid entry id.' });
+  }
+
   const entry = await ProductionEntry.findById(req.params.id);
   if (!entry) {
     return res.status(404).json({ error: 'Entry not found.' });
@@ -629,6 +755,14 @@ app.post('/api/entries/clone-previous', authMiddleware, requireRole('admin', 'su
   if (!date) {
     return res.status(400).json({ error: 'date is required.' });
   }
+
+  if (!isValidDateString(date)) {
+    return res.status(400).json({ error: 'Invalid date.' });
+  }
+
+  if (lineId && !asObjectIdOrNull(lineId)) return res.status(400).json({ error: 'Invalid lineId.' });
+  if (machineId && !asObjectIdOrNull(machineId)) return res.status(400).json({ error: 'Invalid machineId.' });
+  if (shiftId && !asObjectIdOrNull(shiftId)) return res.status(400).json({ error: 'Invalid shiftId.' });
 
   const current = new Date(date);
   current.setDate(current.getDate() - 1);
@@ -692,17 +826,35 @@ app.get('/api/reports', authMiddleware, async (req, res) => {
     lineId,
   } = req.query;
 
+  const allowedReportTypes = new Set(['daily', 'line', 'operator', 'machine', 'shift', 'dateRange']);
+  if (!allowedReportTypes.has(type)) {
+    return res.status(400).json({ error: 'Invalid report type.' });
+  }
+
   const query = {};
-  if (date) query.date = date;
-  if (shiftId) query.shiftId = shiftId;
-  if (operatorId) query.operatorId = operatorId;
-  if (machineId) query.machineId = machineId;
-  if (departmentId) query.departmentId = departmentId;
-  if (lineId) query.lineId = lineId;
+  if (date) {
+    if (!isValidDateString(date)) return res.status(400).json({ error: 'Invalid date.' });
+    query.date = date;
+  }
+
+  const reportIdFilters = { shiftId, operatorId, machineId, departmentId, lineId };
+  for (const [field, rawValue] of Object.entries(reportIdFilters)) {
+    if (!rawValue) continue;
+    const sanitizedId = asObjectIdOrNull(rawValue);
+    if (!sanitizedId) return res.status(400).json({ error: `Invalid ${field}.` });
+    query[field] = sanitizedId;
+  }
+
   if (from || to) {
     query.date = {};
-    if (from) query.date.$gte = from;
-    if (to) query.date.$lte = to;
+    if (from) {
+      if (!isValidDateString(from)) return res.status(400).json({ error: 'Invalid from date.' });
+      query.date.$gte = from;
+    }
+    if (to) {
+      if (!isValidDateString(to)) return res.status(400).json({ error: 'Invalid to date.' });
+      query.date.$lte = to;
+    }
   }
 
   if (req.user.role === 'operator') {
@@ -765,8 +917,8 @@ app.get('/api/reports', authMiddleware, async (req, res) => {
 app.get('/api/audit-logs', authMiddleware, requireRole('admin', 'supervisor'), async (req, res) => {
   const { entity = '', entityId = '' } = req.query;
   const query = {};
-  if (entity) query.entity = entity;
-  if (entityId) query.entityId = entityId;
+  if (entity) query.entity = String(entity).replace(/[^a-zA-Z0-9:_-]/g, '');
+  if (entityId) query.entityId = String(entityId).replace(/[^a-zA-Z0-9]/g, '');
 
   const logs = await AuditLog.find(query).sort({ createdAt: -1 }).limit(500).lean();
   return res.json(logs);

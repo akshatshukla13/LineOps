@@ -156,7 +156,7 @@ Filters:
 ### Backend (`server/.env`)
 ```env
 PORT=5000
-MONGODB_URI=mongodb+srv://akshat:akshat@testcluster.vsuz8.mongodb.net/?appName=lineops
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/?appName=lineops
 MONGODB_DB_NAME=lineops
 FRONTEND_URL=http://localhost:5173
 JWT_SECRET=replace_with_secure_secret
