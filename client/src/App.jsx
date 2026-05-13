@@ -183,21 +183,22 @@ function App() {
   const optionsByKind = (kind) => masters[kind] || []
 
   const filteredMachines = useMemo(() => {
-    if (!entryDraft.lineId) return optionsByKind('machine')
-    return optionsByKind('machine').filter((item) => item.lineId === entryDraft.lineId)
-  }, [entryDraft.lineId, masters])
+    const machines = masters.machine || []
+    if (!entryDraft.lineId) return machines
+    return machines.filter((item) => item.lineId === entryDraft.lineId)
+  }, [entryDraft.lineId, masters.machine])
 
   const filteredProcesses = useMemo(() => {
-    if (!entryDraft.machineId) return optionsByKind('process')
-    return optionsByKind('process').filter((item) => item.machineId === entryDraft.machineId)
-  }, [entryDraft.machineId, masters])
+    const processes = masters.process || []
+    if (!entryDraft.machineId) return processes
+    return processes.filter((item) => item.machineId === entryDraft.machineId)
+  }, [entryDraft.machineId, masters.process])
 
   const filteredOperators = useMemo(() => {
-    if (!entryDraft.departmentId) return optionsByKind('operator')
-    return optionsByKind('operator').filter(
-      (item) => item.departmentId === entryDraft.departmentId,
-    )
-  }, [entryDraft.departmentId, masters])
+    const operators = masters.operator || []
+    if (!entryDraft.departmentId) return operators
+    return operators.filter((item) => item.departmentId === entryDraft.departmentId)
+  }, [entryDraft.departmentId, masters.operator])
 
   const calculated = useMemo(() => {
     const totalProduction = entryDraft.hourlyInputs.reduce((sum, value) => sum + Number(value || 0), 0)
