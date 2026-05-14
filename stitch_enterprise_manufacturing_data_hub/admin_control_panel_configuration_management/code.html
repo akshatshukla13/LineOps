@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Manufacturing Admin Control Panel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-primary-container": "#799dd6",
+                      "inverse-primary": "#a7c8ff",
+                      "on-primary-fixed-variant": "#1f477b",
+                      "surface-container-highest": "#e1e3e4",
+                      "outline-variant": "#c3c6d1",
+                      "background": "#f8f9fa",
+                      "tertiary-container": "#592300",
+                      "outline": "#737780",
+                      "tertiary-fixed": "#ffdbca",
+                      "primary-container": "#003366",
+                      "inverse-on-surface": "#f0f1f2",
+                      "surface-bright": "#f8f9fa",
+                      "secondary": "#505f76",
+                      "on-primary-fixed": "#001b3c",
+                      "error-container": "#ffdad6",
+                      "surface-container-high": "#e7e8e9",
+                      "secondary-fixed": "#d3e4fe",
+                      "inverse-surface": "#2e3132",
+                      "on-error": "#ffffff",
+                      "tertiary-fixed-dim": "#ffb690",
+                      "surface-dim": "#d9dadb",
+                      "secondary-fixed-dim": "#b7c8e1",
+                      "surface": "#f8f9fa",
+                      "on-secondary-container": "#54647a",
+                      "on-surface": "#191c1d",
+                      "surface-container-low": "#f3f4f5",
+                      "surface-variant": "#e1e3e4",
+                      "surface-container": "#edeeef",
+                      "on-secondary-fixed": "#0b1c30",
+                      "secondary-container": "#d0e1fb",
+                      "primary": "#001e40",
+                      "primary-fixed": "#d5e3ff",
+                      "on-secondary-fixed-variant": "#38485d",
+                      "surface-container-lowest": "#ffffff",
+                      "on-tertiary-container": "#d8885c",
+                      "on-secondary": "#ffffff",
+                      "primary-fixed-dim": "#a7c8ff",
+                      "on-error-container": "#93000a",
+                      "on-tertiary": "#ffffff",
+                      "error": "#ba1a1a",
+                      "tertiary": "#381300",
+                      "on-surface-variant": "#43474f",
+                      "on-background": "#191c1d",
+                      "on-tertiary-fixed": "#341100",
+                      "surface-tint": "#3a5f94",
+                      "on-tertiary-fixed-variant": "#723610",
+                      "on-primary": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "xs": "4px",
+                      "xl": "64px",
+                      "sm": "12px",
+                      "base": "8px",
+                      "margin-mobile": "16px",
+                      "lg": "40px",
+                      "gutter": "24px",
+                      "md": "24px",
+                      "margin-desktop": "32px"
+              },
+              "fontFamily": {
+                      "data-tabular": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "data-tabular": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col md:flex-row font-body-md antialiased">
+<!-- Desktop Sidebar (Navigation) -->
+<aside class="hidden md:flex flex-col w-64 bg-surface border-r border-outline-variant shadow-sm h-screen sticky top-0 z-40">
+<div class="h-xl flex items-center px-gutter border-b border-outline-variant">
+<span class="font-headline-md text-headline-md font-bold text-primary">Admin Control</span>
+</div>
+<nav class="flex-1 overflow-y-auto py-margin-desktop px-margin-mobile flex flex-col gap-sm">
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg bg-surface-variant text-primary font-label-md text-label-md font-bold transition-opacity duration-150 hover:bg-surface-variant" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">precision_manufacturing</span>
+                Machines
+            </a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant font-label-md text-label-md hover:bg-surface-container transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">badge</span>
+                Operators
+            </a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant font-label-md text-label-md hover:bg-surface-container transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">conveyor_belt</span>
+                Lines
+            </a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant font-label-md text-label-md hover:bg-surface-container transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">account_tree</span>
+                Processes
+            </a>
+</nav>
+<div class="p-margin-mobile border-t border-outline-variant">
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant font-label-md text-label-md hover:bg-surface-container transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+</div>
+</aside>
+<!-- Mobile Top App Bar -->
+<header class="md:hidden flex justify-between items-center w-full px-margin-mobile h-xl bg-surface-container-highest text-primary shadow-sm border-b border-outline-variant sticky top-0 z-40">
+<div class="flex items-center gap-sm">
+<button class="text-on-surface-variant hover:bg-surface-variant p-2 rounded-full transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<span class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-on-surface">Admin</span>
+</div>
+<div class="flex items-center gap-sm">
+<button class="flex items-center gap-xs text-primary font-label-md text-label-md bg-surface-variant px-3 py-2 rounded-full font-bold">
+                 Machines
+                 <span class="material-symbols-outlined text-[18px]">expand_more</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 w-full max-w-7xl mx-auto p-margin-mobile md:p-margin-desktop flex flex-col gap-gutter">
+<!-- Page Header & Actions -->
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-margin-mobile">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-primary">Machines Management</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Manage factory floor machinery, status, and line assignments.</p>
+</div>
+<button class="bg-primary text-on-primary font-label-md text-label-md px-6 h-12 rounded-full flex items-center justify-center gap-sm shadow-md hover:opacity-90 transition-opacity w-full sm:w-auto focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
+<span class="material-symbols-outlined">add</span>
+                Add New Machine
+            </button>
+</div>
+<!-- Filter & Search Bar -->
+<div class="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+<div class="relative w-full md:flex-1">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full h-12 pl-12 pr-4 bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder-outline" placeholder="Search machine ID, name, or model..." type="text"/>
+</div>
+<div class="flex gap-4 w-full md:w-auto">
+<select class="h-12 px-4 bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary flex-1 md:w-48 appearance-none cursor-pointer">
+<option value="">All Lines</option>
+<option value="line1">Assembly Line 1</option>
+<option value="line2">Packaging Line A</option>
+<option value="line3">CNC Cell B</option>
+</select>
+<select class="h-12 px-4 bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary flex-1 md:w-48 appearance-none cursor-pointer">
+<option value="">Status: All</option>
+<option value="active">Active</option>
+<option value="maintenance">Maintenance</option>
+<option value="offline">Offline</option>
+</select>
+</div>
+</div>
+<!-- Data Table Section (Level 1 Card) -->
+<div class="bg-surface rounded-xl shadow-sm border border-outline-variant overflow-hidden flex flex-col">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[800px]">
+<thead class="bg-surface-container-low border-b border-outline-variant">
+<tr>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Machine ID</th>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Name / Model</th>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Assigned Line</th>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Status</th>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Last Maintained</th>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant font-data-tabular text-data-tabular">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-lowest transition-colors h-[40px] md:h-[56px]">
+<td class="py-3 px-6 text-primary font-bold">MCH-001</td>
+<td class="py-3 px-6 text-on-surface">Haas VF-2 CNC</td>
+<td class="py-3 px-6 text-on-surface-variant">CNC Cell B</td>
+<td class="py-3 px-6">
+<span class="inline-flex items-center px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-md text-label-md">
+<span class="w-2 h-2 rounded-full bg-primary mr-2"></span> Active
+                                </span>
+</td>
+<td class="py-3 px-6 text-on-surface-variant">2023-10-15</td>
+<td class="py-3 px-6 text-right space-x-2">
+<button class="text-primary hover:text-primary-fixed-dim p-2 rounded-full hover:bg-surface-variant transition-colors" title="Edit">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+</button>
+<button class="text-error hover:text-on-error-container p-2 rounded-full hover:bg-error-container transition-colors" title="Delete">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="bg-surface-bright hover:bg-surface-container-lowest transition-colors h-[40px] md:h-[56px]">
+<td class="py-3 px-6 text-primary font-bold">MCH-042</td>
+<td class="py-3 px-6 text-on-surface">Kuka KR Quantec</td>
+<td class="py-3 px-6 text-on-surface-variant">Assembly Line 1</td>
+<td class="py-3 px-6">
+<span class="inline-flex items-center px-3 py-1 rounded-full bg-error-container text-on-error-container font-label-md text-label-md">
+<span class="w-2 h-2 rounded-full bg-error mr-2"></span> Offline
+                                </span>
+</td>
+<td class="py-3 px-6 text-on-surface-variant">2023-09-22</td>
+<td class="py-3 px-6 text-right space-x-2">
+<button class="text-primary hover:text-primary-fixed-dim p-2 rounded-full hover:bg-surface-variant transition-colors" title="Edit">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+</button>
+<button class="text-error hover:text-on-error-container p-2 rounded-full hover:bg-error-container transition-colors" title="Delete">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-lowest transition-colors h-[40px] md:h-[56px]">
+<td class="py-3 px-6 text-primary font-bold">MCH-088</td>
+<td class="py-3 px-6 text-on-surface">Bosch Packaging Unit</td>
+<td class="py-3 px-6 text-on-surface-variant">Packaging Line A</td>
+<td class="py-3 px-6">
+<span class="inline-flex items-center px-3 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-label-md">
+<span class="w-2 h-2 rounded-full bg-tertiary mr-2"></span> Maintenance
+                                </span>
+</td>
+<td class="py-3 px-6 text-on-surface-variant">2023-11-01</td>
+<td class="py-3 px-6 text-right space-x-2">
+<button class="text-primary hover:text-primary-fixed-dim p-2 rounded-full hover:bg-surface-variant transition-colors" title="Edit">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+</button>
+<button class="text-error hover:text-on-error-container p-2 rounded-full hover:bg-error-container transition-colors" title="Delete">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="bg-surface-bright hover:bg-surface-container-lowest transition-colors h-[40px] md:h-[56px]">
+<td class="py-3 px-6 text-primary font-bold">MCH-105</td>
+<td class="py-3 px-6 text-on-surface">Fanuc R-2000iC</td>
+<td class="py-3 px-6 text-on-surface-variant">Assembly Line 1</td>
+<td class="py-3 px-6">
+<span class="inline-flex items-center px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-md text-label-md">
+<span class="w-2 h-2 rounded-full bg-primary mr-2"></span> Active
+                                </span>
+</td>
+<td class="py-3 px-6 text-on-surface-variant">2023-10-28</td>
+<td class="py-3 px-6 text-right space-x-2">
+<button class="text-primary hover:text-primary-fixed-dim p-2 rounded-full hover:bg-surface-variant transition-colors" title="Edit">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+</button>
+<button class="text-error hover:text-on-error-container p-2 rounded-full hover:bg-error-container transition-colors" title="Delete">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination Footer -->
+<div class="bg-surface-container-low border-t border-outline-variant p-4 flex items-center justify-between">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Showing 1 to 4 of 124 entries</span>
+<div class="flex gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant text-outline hover:bg-surface-variant transition-colors disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary text-on-primary font-label-md text-label-md shadow-sm">1</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant text-on-surface hover:bg-surface-variant transition-colors font-label-md text-label-md">2</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant text-on-surface hover:bg-surface-variant transition-colors font-label-md text-label-md">3</button>
+<span class="w-10 h-10 flex items-center justify-center text-on-surface-variant">...</span>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant text-on-surface hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Overlay/Modal (Level 3) - Hidden by default, representing the "Add New" state -->
+<!-- Remove 'hidden' class to preview -->
+<div class="fixed inset-0 z-50 bg-on-background/50 backdrop-blur-sm hidden flex items-center justify-center p-margin-mobile">
+<div class="bg-surface rounded-xl shadow-[0px_20px_25px_rgba(0,0,0,0.1)] border border-outline-variant w-full max-w-lg flex flex-col overflow-hidden">
+<div class="flex justify-between items-center p-6 border-b border-outline-variant bg-surface-container-low">
+<h2 class="font-headline-md text-headline-md text-primary font-bold">Add New Machine</h2>
+<button class="text-on-surface-variant hover:text-error transition-colors p-1 rounded-full hover:bg-surface-variant">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-6 flex flex-col gap-6 overflow-y-auto max-h-[716px]">
+<div class="flex flex-col gap-2">
+<label class="font-label-md text-label-md text-on-surface-variant">Machine ID <span class="text-error">*</span></label>
+<input class="h-12 px-4 bg-surface border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder-outline" placeholder="e.g. MCH-102" type="text"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-label-md text-label-md text-on-surface-variant">Name / Model <span class="text-error">*</span></label>
+<input class="h-12 px-4 bg-surface border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder-outline" placeholder="e.g. Haas VF-2 CNC" type="text"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-label-md text-label-md text-on-surface-variant">Assigned Line</label>
+<div class="relative">
+<select class="w-full h-12 px-4 bg-surface border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer">
+<option value="">Select a Line...</option>
+<option value="line1">Assembly Line 1</option>
+<option value="line2">Packaging Line A</option>
+<option value="line3">CNC Cell B</option>
+</select>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline pointer-events-none">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-label-md text-label-md text-on-surface-variant">Initial Status</label>
+<div class="flex gap-4">
+<label class="flex items-center gap-2 cursor-pointer p-3 border border-outline-variant rounded-lg flex-1 hover:bg-surface-container-low transition-colors">
+<input checked="" class="w-6 h-6 text-primary focus:ring-primary border-outline-variant" name="status" type="radio" value="active"/>
+<span class="font-body-sm text-body-sm text-on-surface">Active</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer p-3 border border-outline-variant rounded-lg flex-1 hover:bg-surface-container-low transition-colors">
+<input class="w-6 h-6 text-primary focus:ring-primary border-outline-variant" name="status" type="radio" value="offline"/>
+<span class="font-body-sm text-body-sm text-on-surface">Offline</span>
+</label>
+</div>
+</div>
+</div>
+<div class="p-6 border-t border-outline-variant bg-surface-container-lowest flex justify-end gap-4">
+<button class="px-6 h-12 rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-variant transition-colors focus:outline-none focus:ring-2 focus:ring-outline-variant focus:ring-offset-2">Cancel</button>
+<button class="px-6 h-12 rounded-lg bg-primary text-on-primary font-label-md text-label-md shadow-md hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">Save Machine</button>
+</div>
+</div>
+</div>
+</body></html>

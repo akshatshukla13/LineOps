@@ -18,10 +18,9 @@ import ExcelJS from 'exceljs'
 const TOKEN_KEY = 'lineops_token'
 const USER_KEY = 'lineops_user'
 const THEME_KEY = 'lineops_theme'
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:5000')
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
-if (!API_BASE_URL) {
+if (import.meta.env.PROD && !import.meta.env.VITE_API_BASE_URL) {
   throw new Error('VITE_API_BASE_URL is required in production builds')
 }
 
@@ -37,8 +36,111 @@ const masterKinds = [
   'downtimeReason',
 ]
 
+const masterTypeConfig = {
+  shift: {
+    label: 'Shift',
+    fields: ['name'],
+    displayFields: { name: 'Shift Name' },
+    tableColumns: ['name', 'active'],
+    columnLabels: { name: 'Shift Name', active: 'Status' },
+    parent: null,
+    description: 'Work shifts (Morning, Evening, Night)',
+    color: 'blue',
+    icon: '🕐',
+  },
+  department: {
+    label: 'Department',
+    fields: ['name', 'code'],
+    displayFields: { name: 'Department Name', code: 'Department Code' },
+    tableColumns: ['name', 'code', 'active'],
+    columnLabels: { name: 'Name', code: 'Code', active: 'Status' },
+    parent: null,
+    description: 'Departments within factory',
+    color: 'green',
+    icon: '🏢',
+  },
+  line: {
+    label: 'Production Line',
+    fields: ['name', 'code', 'departmentId'],
+    displayFields: { name: 'Line Name', code: 'Line Code', departmentId: 'Department' },
+    tableColumns: ['name', 'code', 'departmentId', 'active'],
+    columnLabels: { name: 'Line', code: 'Code', departmentId: 'Department', active: 'Status' },
+    parent: 'department',
+    description: 'Production lines under departments',
+    color: 'purple',
+    icon: '🏭',
+  },
+  machine: {
+    label: 'Machine',
+    fields: ['name', 'code', 'lineId'],
+    displayFields: { name: 'Machine Name', code: 'Machine Code', lineId: 'Production Line' },
+    tableColumns: ['name', 'code', 'lineId', 'active'],
+    columnLabels: { name: 'Machine', code: 'Code', lineId: 'Line', active: 'Status' },
+    parent: 'line',
+    description: 'Machines on production lines',
+    color: 'orange',
+    icon: '⚙️',
+  },
+  process: {
+    label: 'Process',
+    fields: ['name', 'code', 'machineId'],
+    displayFields: { name: 'Process Name', code: 'Process Code', machineId: 'Machine' },
+    tableColumns: ['name', 'code', 'machineId', 'active'],
+    columnLabels: { name: 'Process', code: 'Code', machineId: 'Machine', active: 'Status' },
+    parent: 'machine',
+    description: 'Manufacturing processes per machine',
+    color: 'pink',
+    icon: '⚡',
+  },
+  operator: {
+    label: 'Operator',
+    fields: ['name', 'code', 'departmentId'],
+    displayFields: { name: 'Operator Name', code: 'Employee ID', departmentId: 'Department' },
+    tableColumns: ['name', 'code', 'departmentId', 'active'],
+    columnLabels: { name: 'Name', code: 'Employee ID', departmentId: 'Department', active: 'Status' },
+    parent: 'department',
+    description: 'Factory operators by department',
+    color: 'cyan',
+    icon: '👤',
+  },
+  product: {
+    label: 'Product',
+    fields: ['name', 'code'],
+    displayFields: { name: 'Product Name', code: 'Product Code' },
+    tableColumns: ['name', 'code', 'active'],
+    columnLabels: { name: 'Product', code: 'Code', active: 'Status' },
+    parent: null,
+    description: 'Products manufactured',
+    color: 'indigo',
+    icon: '📦',
+  },
+  defectType: {
+    label: 'Defect Type',
+    fields: ['name', 'code'],
+    displayFields: { name: 'Defect Type Name', code: 'Type Code' },
+    tableColumns: ['name', 'code', 'active'],
+    columnLabels: { name: 'Type', code: 'Code', active: 'Status' },
+    parent: null,
+    description: 'Types of product defects (Critical, Major, Minor)',
+    color: 'red',
+    icon: '❌',
+  },
+  downtimeReason: {
+    label: 'Downtime Reason',
+    fields: ['name', 'code'],
+    displayFields: { name: 'Reason Name', code: 'Reason Code' },
+    tableColumns: ['name', 'code', 'active'],
+    columnLabels: { name: 'Reason', code: 'Code', active: 'Status' },
+    parent: null,
+    description: 'Reasons for production downtime (Power, Maintenance, etc.)',
+    color: 'amber',
+    icon: '⏸️',
+  },
+}
+
 const reportTypes = [
-  { value: 'daily', label: 'Daily Report' },
+  { value: 'monitoring', label: 'Production Monitoring (Detailed)' },
+  { value: 'daily', label: 'Daily Report (Summary)' },
   { value: 'line', label: 'Line-wise Report' },
   { value: 'operator', label: 'Operator-wise Report' },
   { value: 'machine', label: 'Machine-wise Report' },
@@ -142,6 +244,7 @@ function App() {
     lineId: '',
     machineId: '',
   })
+  const [masterSearch, setMasterSearch] = useState('')
 
   const loginForm = useForm({
     resolver: zodResolver(loginSchema),
@@ -186,6 +289,23 @@ function App() {
   }
 
   const optionsByKind = (kind) => masters[kind] || []
+
+  const getParentName = (parentKind, parentId) => {
+    if (!parentId || !parentKind) return '-'
+    const parent = (masters[parentKind] || []).find((item) => item._id === parentId)
+    return parent ? `${parent.name} (${parent.code || 'N/A'})` : '-'
+  }
+
+  const selectedMasterRows = optionsByKind(masterForm.kind)
+
+  const filteredMasterRows = useMemo(() => {
+    if (!masterSearch.trim()) return selectedMasterRows
+    const search = masterSearch.toLowerCase()
+    return selectedMasterRows.filter((item) =>
+      (item.name?.toLowerCase().includes(search) ||
+      item.code?.toLowerCase().includes(search))
+    )
+  }, [selectedMasterRows, masterSearch])
 
   const filteredMachines = useMemo(() => {
     const machines = masters.machine || []
@@ -467,22 +587,93 @@ function App() {
 
   const exportReportExcel = async () => {
     const workbook = new ExcelJS.Workbook()
-    const worksheet = workbook.addWorksheet('Production Report')
-    worksheet.columns = [
-      { header: 'Key', key: 'key', width: 20 },
-      { header: 'Records', key: 'records', width: 12 },
-      { header: 'Planned Qty', key: 'plannedQty', width: 16 },
-      { header: 'Total Production', key: 'totalProduction', width: 18 },
-      { header: 'Net Production', key: 'netProduction', width: 16 },
-      { header: 'Reject Qty', key: 'rejectQty', width: 12 },
-      { header: 'Rework Qty', key: 'reworkQty', width: 12 },
-      { header: 'Downtime Minutes', key: 'downtimeMinutes', width: 18 },
-      { header: 'Efficiency %', key: 'efficiencyPct', width: 14 },
-    ]
+    const worksheet = workbook.addWorksheet('Production Monitoring')
+    
+    // Check if it's a detailed monitoring report
+    if (reportFilters.type === 'monitoring' && reportData.length > 0) {
+      // Production Monitoring Table format (matching Excel format)
+      worksheet.columns = [
+        { header: 'S.No', key: 'sno', width: 8 },
+        { header: 'Date', key: 'date', width: 12 },
+        { header: 'Line', key: 'line', width: 15 },
+        { header: 'Machine', key: 'machine', width: 18 },
+        { header: 'Operator', key: 'operator', width: 18 },
+        { header: 'Process', key: 'process', width: 15 },
+        { header: 'Shift', key: 'shift', width: 12 },
+        { header: 'Target Qty', key: 'targetQty', width: 12 },
+        { header: 'H1', key: 'h1', width: 8 },
+        { header: 'H2', key: 'h2', width: 8 },
+        { header: 'H3', key: 'h3', width: 8 },
+        { header: 'H4', key: 'h4', width: 8 },
+        { header: 'H5', key: 'h5', width: 8 },
+        { header: 'H6', key: 'h6', width: 8 },
+        { header: 'H7', key: 'h7', width: 8 },
+        { header: 'H8', key: 'h8', width: 8 },
+        { header: 'H9', key: 'h9', width: 8 },
+        { header: 'H10', key: 'h10', width: 8 },
+        { header: 'H11', key: 'h11', width: 8 },
+        { header: 'H12', key: 'h12', width: 8 },
+        { header: 'H13', key: 'h13', width: 8 },
+        { header: 'Total', key: 'total', width: 10 },
+        { header: 'Rejected', key: 'rejected', width: 10 },
+        { header: 'Rework', key: 'rework', width: 10 },
+        { header: 'Downtime', key: 'downtime', width: 10 },
+        { header: 'Reason', key: 'reason', width: 15 },
+        { header: 'Efficiency %', key: 'efficiency', width: 12 },
+        { header: 'Remarks', key: 'remarks', width: 20 },
+      ]
 
-    reportData.forEach((row) => {
-      worksheet.addRow(row)
-    })
+      reportData.forEach((row, idx) => {
+        const hourlyData = row.hourlyInputs || Array(13).fill(0)
+        worksheet.addRow({
+          sno: idx + 1,
+          date: row.date,
+          line: row.lineId?.name || '-',
+          machine: row.machineId?.name || '-',
+          operator: row.operatorId?.name || '-',
+          process: row.processId?.name || '-',
+          shift: row.shiftId?.name || '-',
+          targetQty: row.plannedQty,
+          h1: hourlyData[0] || 0,
+          h2: hourlyData[1] || 0,
+          h3: hourlyData[2] || 0,
+          h4: hourlyData[3] || 0,
+          h5: hourlyData[4] || 0,
+          h6: hourlyData[5] || 0,
+          h7: hourlyData[6] || 0,
+          h8: hourlyData[7] || 0,
+          h9: hourlyData[8] || 0,
+          h10: hourlyData[9] || 0,
+          h11: hourlyData[10] || 0,
+          h12: hourlyData[11] || 0,
+          h13: hourlyData[12] || 0,
+          total: row.totalProduction || 0,
+          rejected: row.rejectQty || 0,
+          rework: row.reworkQty || 0,
+          downtime: row.downtimeMinutes || 0,
+          reason: row.downtimeReasonId?.name || '-',
+          efficiency: row.efficiencyPct || 0,
+          remarks: row.remarks || '-',
+        })
+      })
+    } else {
+      // Summary report format
+      worksheet.columns = [
+        { header: 'Category', key: 'key', width: 20 },
+        { header: 'Records', key: 'records', width: 12 },
+        { header: 'Planned Qty', key: 'plannedQty', width: 16 },
+        { header: 'Total Production', key: 'totalProduction', width: 18 },
+        { header: 'Net Production', key: 'netProduction', width: 16 },
+        { header: 'Reject Qty', key: 'rejectQty', width: 12 },
+        { header: 'Rework Qty', key: 'reworkQty', width: 12 },
+        { header: 'Downtime Minutes', key: 'downtimeMinutes', width: 18 },
+        { header: 'Efficiency %', key: 'efficiencyPct', width: 14 },
+      ]
+
+      reportData.forEach((row) => {
+        worksheet.addRow(row)
+      })
+    }
 
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], {
@@ -492,7 +683,7 @@ function App() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `lineops-report-${Date.now()}.xlsx`
+    link.download = `lineops-${reportFilters.type}-report-${Date.now()}.xlsx`
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -501,27 +692,60 @@ function App() {
     const pdfDoc = await PDFDocument.create()
     const page = pdfDoc.addPage([842, 595])
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-    page.drawText('Smart Production Monitoring Report', {
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+    
+    page.drawText('Production Monitoring Report', {
       x: 30,
       y: 560,
-      size: 16,
-      font,
+      size: 18,
+      font: boldFont,
       color: rgb(0.1, 0.1, 0.1),
     })
 
-    let y = 535
-    reportData.slice(0, 25).forEach((row) => {
-      page.drawText(
-        `${row.key} | Rec:${row.records} | Plan:${row.plannedQty} | Net:${row.netProduction} | Eff:${row.efficiencyPct}%`,
-        {
-          x: 30,
-          y,
-          size: 10,
-          font,
-          color: rgb(0.2, 0.2, 0.2),
-        },
-      )
-      y -= 18
+    page.drawText(`Report Type: ${reportFilters.type} | Generated: ${new Date().toLocaleDateString()}`, {
+      x: 30,
+      y: 540,
+      size: 10,
+      font,
+      color: rgb(0.4, 0.4, 0.4),
+    })
+
+    let y = 520
+    const pageHeight = 595
+    const lineHeight = 14
+    const marginBottom = 20
+
+    reportData.slice(0, 40).forEach((row) => {
+      if (y < marginBottom) {
+        // Create new page if needed
+        const newPage = pdfDoc.addPage([842, 595])
+        y = 570
+      }
+
+      if (reportFilters.type === 'monitoring') {
+        page.drawText(
+          `${row.date} | ${row.lineId?.name || 'N/A'} | ${row.machineId?.name || 'N/A'} | ${row.operatorId?.name || 'N/A'} | Tgt: ${row.plannedQty} | Prod: ${row.totalProduction} | Eff: ${row.efficiencyPct}%`,
+          {
+            x: 30,
+            y,
+            size: 9,
+            font,
+            color: rgb(0.2, 0.2, 0.2),
+          },
+        )
+      } else {
+        page.drawText(
+          `${row.key} | Records: ${row.records} | Planned: ${row.plannedQty} | Net: ${row.netProduction} | Efficiency: ${row.efficiencyPct}%`,
+          {
+            x: 30,
+            y,
+            size: 9,
+            font,
+            color: rgb(0.2, 0.2, 0.2),
+          },
+        )
+      }
+      y -= lineHeight
     })
 
     const bytes = await pdfDoc.save()
@@ -733,8 +957,6 @@ function App() {
       </div>
     )
   }
-
-  const selectedMasterRows = optionsByKind(masterForm.kind)
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
@@ -1077,9 +1299,12 @@ function App() {
 
         {activeTab === 'reports' ? (
           <section className="grid gap-4">
+            {/* Filter Section */}
             <div className="card">
-              <h2 className="mb-3 text-base font-semibold">Reports & Exports</h2>
-              <div className="grid gap-3 md:grid-cols-4">
+              <h2 className="mb-4 text-base font-semibold flex items-center gap-2">
+                <span>📊</span> Production Monitoring Report
+              </h2>
+              <div className="grid gap-3 md:grid-cols-5">
                 <div>
                   <label className="mb-1 block text-xs font-semibold">Report Type</label>
                   <select className="select" onChange={(e) => changeReportFilter('type', e.target.value)} value={reportFilters.type}>
@@ -1088,80 +1313,163 @@ function App() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">Date</label>
-                  <input className="input" onChange={(e) => changeReportFilter('date', e.target.value)} type="date" value={reportFilters.date} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">From</label>
-                  <input className="input" onChange={(e) => changeReportFilter('from', e.target.value)} type="date" value={reportFilters.from} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">To</label>
-                  <input className="input" onChange={(e) => changeReportFilter('to', e.target.value)} type="date" value={reportFilters.to} />
-                </div>
-                <SelectField label="Shift" options={optionsByKind('shift')} onChange={(v) => changeReportFilter('shiftId', v)} value={reportFilters.shiftId} />
-                <SelectField label="Operator" options={optionsByKind('operator')} onChange={(v) => changeReportFilter('operatorId', v)} value={reportFilters.operatorId} />
-                <SelectField label="Machine" options={optionsByKind('machine')} onChange={(v) => changeReportFilter('machineId', v)} value={reportFilters.machineId} />
-                <SelectField label="Department" options={optionsByKind('department')} onChange={(v) => changeReportFilter('departmentId', v)} value={reportFilters.departmentId} />
+                {reportFilters.type === 'monitoring' ? (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold">Date</label>
+                      <input className="input" onChange={(e) => changeReportFilter('date', e.target.value)} type="date" value={reportFilters.date} />
+                    </div>
+                    <SelectField label="Department" options={optionsByKind('department')} onChange={(v) => changeReportFilter('departmentId', v)} value={reportFilters.departmentId} />
+                    <SelectField label="Line" options={optionsByKind('line')} onChange={(v) => changeReportFilter('machineId', v)} value={reportFilters.machineId} />
+                    <SelectField label="Shift" options={optionsByKind('shift')} onChange={(v) => changeReportFilter('shiftId', v)} value={reportFilters.shiftId} />
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold">From Date</label>
+                      <input className="input" onChange={(e) => changeReportFilter('from', e.target.value)} type="date" value={reportFilters.from} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold">To Date</label>
+                      <input className="input" onChange={(e) => changeReportFilter('to', e.target.value)} type="date" value={reportFilters.to} />
+                    </div>
+                    <SelectField label="Operator" options={optionsByKind('operator')} onChange={(v) => changeReportFilter('operatorId', v)} value={reportFilters.operatorId} />
+                    <SelectField label="Machine" options={optionsByKind('machine')} onChange={(v) => changeReportFilter('machineId', v)} value={reportFilters.machineId} />
+                  </>
+                )}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button className="btn-primary" onClick={runReport} type="button">Generate Report</button>
-                <button className="btn-muted" onClick={exportReportExcel} type="button">Export Excel (.xlsx)</button>
-                <button className="btn-muted" onClick={exportReportPdf} type="button">Export PDF</button>
+                <button className="btn-primary" onClick={runReport} type="button">
+                  🔍 Generate Report
+                </button>
+                <button className="btn-muted" onClick={exportReportExcel} disabled={reportData.length === 0} type="button">
+                  📊 Export Excel (.xlsx)
+                </button>
+                <button className="btn-muted" onClick={exportReportPdf} disabled={reportData.length === 0} type="button">
+                  📄 Export PDF
+                </button>
               </div>
             </div>
 
-            <div className="card">
-              <h3 className="mb-2 text-base font-semibold">Report Chart</h3>
-              <div className="h-72 w-full">
-                <ResponsiveContainer>
-                  <BarChart data={reportData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="key" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="plannedQty" fill="#94a3b8" name="Planned" />
-                    <Bar dataKey="netProduction" fill="#2563eb" name="Net Production" />
-                    <Bar dataKey="downtimeMinutes" fill="#f97316" name="Downtime" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="card overflow-x-auto">
-              <table className="min-w-full text-xs">
-                <thead>
-                  <tr className="bg-slate-200 dark:bg-slate-800">
-                    <HeaderCell text="Key" />
-                    <HeaderCell text="Records" />
-                    <HeaderCell text="Planned" />
-                    <HeaderCell text="Total" />
-                    <HeaderCell text="Net" />
-                    <HeaderCell text="Reject" />
-                    <HeaderCell text="Rework" />
-                    <HeaderCell text="Downtime" />
-                    <HeaderCell text="Efficiency %" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {reportData.map((item) => (
-                    <tr key={item.key}>
-                      <BodyCell>{item.key}</BodyCell>
-                      <BodyCell>{item.records}</BodyCell>
-                      <BodyCell>{item.plannedQty}</BodyCell>
-                      <BodyCell>{item.totalProduction}</BodyCell>
-                      <BodyCell>{item.netProduction}</BodyCell>
-                      <BodyCell>{item.rejectQty}</BodyCell>
-                      <BodyCell>{item.reworkQty}</BodyCell>
-                      <BodyCell>{item.downtimeMinutes}</BodyCell>
-                      <BodyCell>{item.efficiencyPct}</BodyCell>
+            {/* Production Monitoring Table - Show if data exists */}
+            {reportData.length > 0 && reportFilters.type === 'monitoring' ? (
+              <div className="card overflow-x-auto">
+                <h3 className="mb-3 text-sm font-semibold">
+                  Production Monitoring Table - {reportFilters.date}
+                </h3>
+                <table className="min-w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-200 dark:bg-slate-800">
+                      <HeaderCell text="Line" />
+                      <HeaderCell text="Machine" />
+                      <HeaderCell text="Operator" />
+                      <HeaderCell text="Process" />
+                      <HeaderCell text="Shift" />
+                      <HeaderCell text="Target" />
+                      {Array.from({ length: 13 }, (_, i) => (
+                        <HeaderCell key={`hr${i + 1}`} text={`H${i + 1}`} />
+                      ))}
+                      <HeaderCell text="Total" />
+                      <HeaderCell text="Reject" />
+                      <HeaderCell text="Rework" />
+                      <HeaderCell text="DT(min)" />
+                      <HeaderCell text="Reason" />
+                      <HeaderCell text="Eff %" />
+                      <HeaderCell text="Remarks" />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {reportData.map((item, idx) => (
+                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-800'}>
+                        <BodyCell>{item.lineId?.name || 'N/A'}</BodyCell>
+                        <BodyCell>{item.machineId?.name || 'N/A'}</BodyCell>
+                        <BodyCell>{item.operatorId?.name || 'N/A'}</BodyCell>
+                        <BodyCell>{item.processId?.name || 'N/A'}</BodyCell>
+                        <BodyCell>{item.shiftId?.name || 'N/A'}</BodyCell>
+                        <BodyCell className="font-semibold text-blue-600">{item.plannedQty}</BodyCell>
+                        {(item.hourlyInputs || Array(13).fill(0)).map((val, i) => (
+                          <BodyCell key={`h${i}`} className={val > 0 ? 'text-green-700 dark:text-green-400 font-semibold' : 'text-gray-400'}>
+                            {val || '-'}
+                          </BodyCell>
+                        ))}
+                        <BodyCell className="font-semibold text-green-600">{item.totalProduction || 0}</BodyCell>
+                        <BodyCell className={item.rejectQty > 0 ? 'text-red-600 font-semibold' : ''}>{item.rejectQty}</BodyCell>
+                        <BodyCell className={item.reworkQty > 0 ? 'text-orange-600 font-semibold' : ''}>{item.reworkQty}</BodyCell>
+                        <BodyCell className={item.downtimeMinutes > 0 ? 'text-red-700 font-semibold' : ''}>{item.downtimeMinutes}</BodyCell>
+                        <BodyCell>{item.downtimeReasonId?.name || '-'}</BodyCell>
+                        <BodyCell className="font-semibold">{item.efficiencyPct || 0}%</BodyCell>
+                        <BodyCell className="text-xs">{item.remarks || '-'}</BodyCell>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {/* Summary Chart - Show for other report types */}
+            {reportData.length > 0 && reportFilters.type !== 'monitoring' ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="card">
+                  <h3 className="mb-2 text-base font-semibold">Production Summary Chart</h3>
+                  <div className="h-72 w-full">
+                    <ResponsiveContainer>
+                      <BarChart data={reportData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="key" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="plannedQty" fill="#94a3b8" name="Planned" />
+                        <Bar dataKey="netProduction" fill="#2563eb" name="Net Production" />
+                        <Bar dataKey="downtimeMinutes" fill="#f97316" name="Downtime (min)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="card overflow-x-auto">
+                  <h3 className="mb-3 text-base font-semibold">Summary Table</h3>
+                  <table className="min-w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-200 dark:bg-slate-800">
+                        <HeaderCell text="Category" />
+                        <HeaderCell text="Records" />
+                        <HeaderCell text="Planned" />
+                        <HeaderCell text="Total" />
+                        <HeaderCell text="Net" />
+                        <HeaderCell text="Reject" />
+                        <HeaderCell text="Rework" />
+                        <HeaderCell text="Downtime" />
+                        <HeaderCell text="Efficiency %" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.map((item) => (
+                        <tr key={item.key}>
+                          <BodyCell className="font-semibold">{item.key}</BodyCell>
+                          <BodyCell>{item.records}</BodyCell>
+                          <BodyCell>{item.plannedQty}</BodyCell>
+                          <BodyCell>{item.totalProduction}</BodyCell>
+                          <BodyCell className="text-green-600 font-semibold">{item.netProduction}</BodyCell>
+                          <BodyCell className="text-red-600">{item.rejectQty}</BodyCell>
+                          <BodyCell className="text-orange-600">{item.reworkQty}</BodyCell>
+                          <BodyCell className="text-red-700">{item.downtimeMinutes}</BodyCell>
+                          <BodyCell className="font-semibold">{item.efficiencyPct}%</BodyCell>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+
+            {reportData.length === 0 ? (
+              <div className="card flex flex-col items-center justify-center py-12 text-center">
+                <p className="text-4xl mb-2">📊</p>
+                <p className="text-base font-semibold">Generate a report to view data</p>
+                <p className="text-sm text-slate-500 mt-1">Select filters and click "Generate Report" above</p>
+              </div>
+            ) : null}
           </section>
         ) : null}
 
@@ -1246,29 +1554,128 @@ function App() {
 
         {activeTab === 'master' && canUseAdmin ? (
           <section className="grid gap-4">
+            <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+              {masterKinds.map((kind) => (
+                <button
+                  className={`card cursor-pointer text-center transition-all ${
+                    masterForm.kind === kind
+                      ? 'ring-2 ring-blue-500'
+                      : 'hover:shadow-md'
+                  }`}
+                  key={kind}
+                  onClick={() => setMasterForm((prev) => ({ ...prev, kind, name: '', code: '', departmentId: '', lineId: '', machineId: '' })) && setMasterSearch('')}
+                  type="button"
+                >
+                  <div className={`mb-2 inline-block rounded-full p-2 text-white text-lg ${
+                    masterTypeConfig[kind]?.color === 'blue' ? 'bg-blue-500' :
+                    masterTypeConfig[kind]?.color === 'green' ? 'bg-green-500' :
+                    masterTypeConfig[kind]?.color === 'purple' ? 'bg-purple-500' :
+                    masterTypeConfig[kind]?.color === 'orange' ? 'bg-orange-500' :
+                    masterTypeConfig[kind]?.color === 'pink' ? 'bg-pink-500' :
+                    masterTypeConfig[kind]?.color === 'cyan' ? 'bg-cyan-500' :
+                    masterTypeConfig[kind]?.color === 'indigo' ? 'bg-indigo-500' :
+                    masterTypeConfig[kind]?.color === 'red' ? 'bg-red-500' :
+                    'bg-amber-500'
+                  }`}>
+                    {masterTypeConfig[kind]?.icon || '◆'}
+                  </div>
+                  <h3 className="text-xs font-semibold">{masterTypeConfig[kind]?.label}</h3>
+                  <p className="mt-2 text-lg font-bold">{(masters[kind] || []).length}</p>
+                  <p className="text-xs text-slate-500">items</p>
+                </button>
+              ))}
+            </div>
+
             <div className="card">
-              <h2 className="mb-3 text-base font-semibold">Master Data Management</h2>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold">Master Data Management</h2>
+                  <p className="mt-1 text-xs text-slate-500">{masterTypeConfig[masterForm.kind]?.description}</p>
+                </div>
+                <select
+                  className="select w-40"
+                  onChange={(e) => setMasterForm((prev) => ({ ...prev, kind: e.target.value, name: '', code: '', departmentId: '', lineId: '', machineId: '' }))}
+                  value={masterForm.kind}
+                >
+                  {masterKinds.map((kind) => (
+                    <option key={kind} value={kind}>{masterTypeConfig[kind]?.label || kind}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid gap-3 md:grid-cols-4">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">Master Type</label>
-                  <select
-                    className="select"
-                    onChange={(e) => setMasterForm((prev) => ({ ...prev, kind: e.target.value }))}
-                    value={masterForm.kind}
-                  >
-                    {masterKinds.map((kind) => (
-                      <option key={kind} value={kind}>{kind}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">Name</label>
-                  <input className="input" onChange={(e) => setMasterForm((prev) => ({ ...prev, name: e.target.value }))} value={masterForm.name} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">Code</label>
-                  <input className="input" onChange={(e) => setMasterForm((prev) => ({ ...prev, code: e.target.value }))} value={masterForm.code} />
-                </div>
+                {masterTypeConfig[masterForm.kind]?.fields.includes('name') ? (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold">{masterTypeConfig[masterForm.kind]?.displayFields?.name || 'Name'} *</label>
+                    <input
+                      className="input"
+                      onChange={(e) => setMasterForm((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder={`Enter ${masterTypeConfig[masterForm.kind]?.displayFields?.name || 'name'}`}
+                      value={masterForm.name}
+                    />
+                  </div>
+                ) : null}
+
+                {masterTypeConfig[masterForm.kind]?.fields.includes('code') ? (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold">{masterTypeConfig[masterForm.kind]?.displayFields?.code || 'Code'}</label>
+                    <input
+                      className="input"
+                      onChange={(e) => setMasterForm((prev) => ({ ...prev, code: e.target.value }))}
+                      placeholder={`Enter ${masterTypeConfig[masterForm.kind]?.displayFields?.code || 'code'}`}
+                      value={masterForm.code}
+                    />
+                  </div>
+                ) : null}
+
+                {masterTypeConfig[masterForm.kind]?.fields.includes('departmentId') ? (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold">{masterTypeConfig[masterForm.kind]?.displayFields?.departmentId || 'Department'}</label>
+                    <select
+                      className="select"
+                      onChange={(e) => setMasterForm((prev) => ({ ...prev, departmentId: e.target.value }))}
+                      value={masterForm.departmentId}
+                    >
+                      <option value="">Select Department</option>
+                      {(masters.department || []).map((item) => (
+                        <option key={item._id} value={item._id}>{item.name} ({item.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+
+                {masterTypeConfig[masterForm.kind]?.fields.includes('lineId') ? (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold">{masterTypeConfig[masterForm.kind]?.displayFields?.lineId || 'Line'}</label>
+                    <select
+                      className="select"
+                      onChange={(e) => setMasterForm((prev) => ({ ...prev, lineId: e.target.value }))}
+                      value={masterForm.lineId}
+                    >
+                      <option value="">Select Line</option>
+                      {(masters.line || []).map((item) => (
+                        <option key={item._id} value={item._id}>{item.name} ({item.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+
+                {masterTypeConfig[masterForm.kind]?.fields.includes('machineId') ? (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold">{masterTypeConfig[masterForm.kind]?.displayFields?.machineId || 'Machine'}</label>
+                    <select
+                      className="select"
+                      onChange={(e) => setMasterForm((prev) => ({ ...prev, machineId: e.target.value }))}
+                      value={masterForm.machineId}
+                    >
+                      <option value="">Select Machine</option>
+                      {(masters.machine || []).map((item) => (
+                        <option key={item._id} value={item._id}>{item.name} ({item.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+
                 <div>
                   <label className="mb-1 block text-xs font-semibold">Status</label>
                   <select
@@ -1280,26 +1687,8 @@ function App() {
                     <option value="false">Inactive</option>
                   </select>
                 </div>
-
-                <SelectField
-                  label="Parent Department"
-                  options={optionsByKind('department')}
-                  onChange={(v) => setMasterForm((prev) => ({ ...prev, departmentId: v }))}
-                  value={masterForm.departmentId}
-                />
-                <SelectField
-                  label="Parent Line"
-                  options={optionsByKind('line')}
-                  onChange={(v) => setMasterForm((prev) => ({ ...prev, lineId: v }))}
-                  value={masterForm.lineId}
-                />
-                <SelectField
-                  label="Parent Machine"
-                  options={optionsByKind('machine')}
-                  onChange={(v) => setMasterForm((prev) => ({ ...prev, machineId: v }))}
-                  value={masterForm.machineId}
-                />
               </div>
+
               <div className="mt-3 flex flex-wrap gap-2">
                 <button className="btn-primary" onClick={saveMasterItem} type="button">Add Master Item</button>
                 <label className="btn-muted cursor-pointer">
@@ -1310,27 +1699,36 @@ function App() {
             </div>
 
             <div className="card overflow-x-auto">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <h3 className="text-sm font-semibold">{masterTypeConfig[masterForm.kind]?.label} Records ({filteredMasterRows.length})</h3>
+                <input
+                  className="input flex-1"
+                  onChange={(e) => setMasterSearch(e.target.value)}
+                  placeholder="Search by name or code..."
+                  value={masterSearch}
+                />
+              </div>
               <table className="min-w-full text-xs">
                 <thead>
                   <tr className="bg-slate-200 dark:bg-slate-800">
-                    <HeaderCell text="Name" />
-                    <HeaderCell text="Code" />
-                    <HeaderCell text="Active" />
-                    <HeaderCell text="Department" />
-                    <HeaderCell text="Line" />
-                    <HeaderCell text="Machine" />
+                    {masterTypeConfig[masterForm.kind]?.tableColumns.includes('name') ? <HeaderCell text={masterTypeConfig[masterForm.kind]?.columnLabels?.name || 'Name'} /> : null}
+                    {masterTypeConfig[masterForm.kind]?.tableColumns.includes('code') ? <HeaderCell text={masterTypeConfig[masterForm.kind]?.columnLabels?.code || 'Code'} /> : null}
+                    {masterTypeConfig[masterForm.kind]?.tableColumns.includes('departmentId') ? <HeaderCell text={masterTypeConfig[masterForm.kind]?.columnLabels?.departmentId || 'Department'} /> : null}
+                    {masterTypeConfig[masterForm.kind]?.tableColumns.includes('lineId') ? <HeaderCell text={masterTypeConfig[masterForm.kind]?.columnLabels?.lineId || 'Line'} /> : null}
+                    {masterTypeConfig[masterForm.kind]?.tableColumns.includes('machineId') ? <HeaderCell text={masterTypeConfig[masterForm.kind]?.columnLabels?.machineId || 'Machine'} /> : null}
+                    {masterTypeConfig[masterForm.kind]?.tableColumns.includes('active') ? <HeaderCell text={masterTypeConfig[masterForm.kind]?.columnLabels?.active || 'Status'} /> : null}
                     <HeaderCell text="Actions" />
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedMasterRows.map((item) => (
+                  {filteredMasterRows.map((item) => (
                     <tr key={item._id}>
-                      <BodyCell>{item.name}</BodyCell>
-                      <BodyCell>{item.code || '-'}</BodyCell>
-                      <BodyCell>{item.active ? 'Yes' : 'No'}</BodyCell>
-                      <BodyCell>{item.departmentId || '-'}</BodyCell>
-                      <BodyCell>{item.lineId || '-'}</BodyCell>
-                      <BodyCell>{item.machineId || '-'}</BodyCell>
+                      {masterTypeConfig[masterForm.kind]?.tableColumns.includes('name') ? <BodyCell>{item.name}</BodyCell> : null}
+                      {masterTypeConfig[masterForm.kind]?.tableColumns.includes('code') ? <BodyCell>{item.code || '-'}</BodyCell> : null}
+                      {masterTypeConfig[masterForm.kind]?.tableColumns.includes('departmentId') ? <BodyCell>{getParentName('department', item.departmentId)}</BodyCell> : null}
+                      {masterTypeConfig[masterForm.kind]?.tableColumns.includes('lineId') ? <BodyCell>{getParentName('line', item.lineId)}</BodyCell> : null}
+                      {masterTypeConfig[masterForm.kind]?.tableColumns.includes('machineId') ? <BodyCell>{getParentName('machine', item.machineId)}</BodyCell> : null}
+                      {masterTypeConfig[masterForm.kind]?.tableColumns.includes('active') ? <BodyCell>{item.active ? '✓ Active' : '✗ Inactive'}</BodyCell> : null}
                       <BodyCell>
                         <div className="flex flex-wrap gap-1">
                           <button className="btn-muted" onClick={() => toggleMasterActive(masterForm.kind, item)} type="button">
