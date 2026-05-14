@@ -32,6 +32,14 @@ if (IS_PRODUCTION && !ADMIN_PASSWORD) {
 // Middleware
 app.use(corsOptions);
 app.use(express.json({ limit: '2mb' }));
+app.use('/api', async (req, res, next) => {
+  try {
+    await ensureDbConnection();
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+});
 app.use('/api', apiLimiter);
 
 // Health check
