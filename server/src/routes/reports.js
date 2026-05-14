@@ -21,25 +21,34 @@ const getShiftCode = (value) => {
   return compact ? compact.charAt(0).toUpperCase() : '-';
 };
 
+const getSummaryLabel = (type, entry) => {
+  if (type === 'daily' || type === 'dateRange') return formatDisplayDate(entry.date);
+  if (type === 'line') return getMasterLabel(entry.lineId, entry.lineId?.name || entry.lineId?.code || '-');
+  if (type === 'operator') return getMasterLabel(entry.operatorId, entry.operatorId?.name || entry.operatorId?.code || '-');
+  if (type === 'machine') return getMasterLabel(entry.machineId, entry.machineId?.name || entry.machineId?.code || '-');
+  if (type === 'shift') return getMasterLabel(entry.shiftId, entry.shiftId?.name || entry.shiftId?.code || '-');
+  return formatDisplayDate(entry.date);
+};
+
 const toMonitoringExportRow = (entry, index) => {
   const hourlyInputs = [...(entry.hourlyInputs || []), ...Array(MONITORING_HOUR_COUNT).fill('')].slice(0, MONITORING_HOUR_COUNT);
   const total = entry.totalProduction ?? hourlyInputs.reduce((sum, value) => sum + Number(value || 0), 0);
 
   return {
     sno: index + 1,
-    lineNo: entry.sheetLineNo || entry.lineId?.code || entry.lineId?.name?.replace(/\D+/g, '') || getMasterLabel(entry.lineId, ''),
+    date: formatDisplayDate(entry.date),
+    line: entry.sheetLineNo || entry.lineId?.code || entry.lineId?.name?.replace(/\D+/g, '') || getMasterLabel(entry.lineId, '-'),
     machine: getMasterLabel(entry.machineId),
-    operatorName: getMasterLabel(entry.operatorId),
-    processName: getMasterLabel(entry.processId),
+    operator: getMasterLabel(entry.operatorId),
+    process: getMasterLabel(entry.processId),
     shift: entry.sheetShift ?? getShiftCode(entry.shiftId),
     hours: entry.scheduledHours ?? 8,
-    targetQty: entry.plannedQty ?? 0,
-    actualQtyDate: formatDisplayDate(entry.date),
-    actualQty: hourlyInputs,
+    target: entry.plannedQty ?? 0,
+    hourlyInputs,
     total,
     rejected: entry.rejectQty || '',
     rework: entry.reworkQty || '',
-    downtimeMinutes: entry.downtimeMinutes || '',
+    downtime: entry.downtimeMinutes || '',
     reason: entry.downtimeReasonId?.name || entry.downtimeOtherText || '',
     efficiency: `${Math.round(Number(entry.efficiencyPct || 0))}%`,
     remarks: entry.remarks || '',
@@ -122,8 +131,15 @@ router.get('/', authMiddleware, async (req, res) => {
     });
   }
 
-  // For other report types, return aggregated data
-  const entries = await ProductionEntry.find(query).lean();
+  // For other report types, return aggregated data with human-readable labels.
+  const entries = await ProductionEntry.find(query)
+    .populate('shiftId', 'name code')
+    .populate('departmentId', 'name code')
+    .populate('lineId', 'name code')
+    .populate('machineId', 'name code')
+    .populate('processId', 'name code')
+    .populate('operatorId', 'name code')
+    .lean();
 
   const groupKeyByType = {
     daily: 'date',
@@ -142,6 +158,7 @@ router.get('/', authMiddleware, async (req, res) => {
     if (!bucket.has(key)) {
       bucket.set(key, {
         key,
+        label: getSummaryLabel(type, entry),
         records: 0,
         plannedQty: 0,
         totalProduction: 0,
@@ -168,7 +185,7 @@ router.get('/', authMiddleware, async (req, res) => {
     efficiencyPct: row.plannedQty > 0 ? Number(((row.netProduction / row.plannedQty) * 100).toFixed(2)) : 0,
   }));
 
-  return res.json({ type, totalRows: report.length, report, sourceCount: entries.length });
+  return res.json({ type, totalRows: report.length, report, spreadsheetRows: report, sourceCount: entries.length });
 });
 
 export default router;

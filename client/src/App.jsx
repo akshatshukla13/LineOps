@@ -210,6 +210,14 @@ const toMonitoringRow = (row, index) => {
   }
 }
 
+const isMonitoringDisplayRow = (row) =>
+  Array.isArray(row?.hourlyInputs) &&
+  Object.prototype.hasOwnProperty.call(row, 'line') &&
+  Object.prototype.hasOwnProperty.call(row, 'machine') &&
+  Object.prototype.hasOwnProperty.call(row, 'operator')
+
+const normalizeMonitoringRow = (row, index) => (isMonitoringDisplayRow(row) ? { ...row, sno: row.sno ?? index + 1 } : toMonitoringRow(row, index))
+
 const getLoadingMessage = (path, method = 'GET') => {
   const normalizedMethod = String(method || 'GET').toUpperCase()
   if (path.includes('/api/auth/login')) return 'Signing in...'
@@ -301,6 +309,7 @@ function App() {
     lineId: '',
   })
   const [reportData, setReportData] = useState([])
+  const [reportSpreadsheetRows, setReportSpreadsheetRows] = useState([])
   const [dbSheetData, setDbSheetData] = useState([])
   const [missedEntries, setMissedEntries] = useState([])
   const [isSavingDraft, setIsSavingDraft] = useState(false)
@@ -458,12 +467,12 @@ function App() {
   }, [calculated.efficiencyPct])
 
   const monitoringRows = useMemo(
-    () => reportData.map((row, index) => toMonitoringRow(row, index)),
-    [reportData],
+    () => (reportSpreadsheetRows.length > 0 ? reportSpreadsheetRows : reportData).map((row, index) => normalizeMonitoringRow(row, index)),
+    [reportData, reportSpreadsheetRows],
   )
 
   const dbSheetRows = useMemo(
-    () => dbSheetData.map((row, index) => toMonitoringRow(row, index)),
+    () => dbSheetData.map((row, index) => normalizeMonitoringRow(row, index)),
     [dbSheetData],
   )
 
@@ -488,7 +497,7 @@ function App() {
 
   const loadDbSheet = async () => {
     const data = await authFetch('/api/reports?type=monitoring')
-    setDbSheetData(data.report || [])
+    setDbSheetData(data.spreadsheetRows || data.report || [])
   }
 
   const loadUsers = async () => {
@@ -709,6 +718,7 @@ function App() {
     try {
       const data = await authFetch(`/api/reports?${query.toString()}`)
       setReportData(data.report || [])
+      setReportSpreadsheetRows(data.spreadsheetRows || data.report || [])
     } catch (error) {
       setErrorText(error.message)
     }
@@ -718,10 +728,10 @@ function App() {
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Production Monitoring')
 
-    if (reportFilters.type === 'monitoring' && reportData.length > 0) {
+    if (reportFilters.type === 'monitoring' && monitoringRows.length > 0) {
       const firstHourColumn = 9
       const totalColumn = firstHourColumn + monitoringHourCount
-      const reportDate = formatDisplayDate(reportFilters.date || reportData[0]?.date)
+      const reportDate = formatDisplayDate(reportFilters.date || monitoringRows[0]?.date)
 
       worksheet.columns = monitoringColumns.map((column) => ({ key: column.key, width: column.width }))
       worksheet.mergeCells(1, firstHourColumn, 1, totalColumn)
@@ -744,7 +754,7 @@ function App() {
         }
       })
 
-      reportData.map(toMonitoringRow).forEach((row) => {
+      monitoringRows.forEach((row) => {
         worksheet.addRow([
           row.sno,
           row.line,
@@ -797,7 +807,17 @@ function App() {
       ]
 
       reportData.forEach((row) => {
-        worksheet.addRow(row)
+        worksheet.addRow({
+          key: row.label || row.key,
+          records: row.records,
+          plannedQty: row.plannedQty,
+          totalProduction: row.totalProduction,
+          netProduction: row.netProduction,
+          rejectQty: row.rejectQty,
+          reworkQty: row.reworkQty,
+          downtimeMinutes: row.downtimeMinutes,
+          efficiencyPct: row.efficiencyPct,
+        })
       })
     }
 
@@ -840,7 +860,9 @@ function App() {
     const lineHeight = 14
     const marginBottom = 20
 
-    reportData.slice(0, 40).forEach((row) => {
+    const pdfRows = reportFilters.type === 'monitoring' ? monitoringRows : reportData
+
+    pdfRows.slice(0, 40).forEach((row) => {
       if (y < marginBottom) {
         page = pdfDoc.addPage([842, 595])
         y = 570
@@ -848,7 +870,7 @@ function App() {
 
       if (reportFilters.type === 'monitoring') {
         page.drawText(
-          `${row.date} | ${row.lineId?.name || 'N/A'} | ${row.machineId?.name || 'N/A'} | ${row.operatorId?.name || 'N/A'} | Tgt: ${row.plannedQty} | Prod: ${row.totalProduction} | Eff: ${row.efficiencyPct}%`,
+          `${row.date} | ${row.line} | ${row.machine} | ${row.operator} | Tgt: ${row.target} | Prod: ${row.total} | Eff: ${row.efficiency}`,
           {
             x: 30,
             y,
@@ -859,7 +881,7 @@ function App() {
         )
       } else {
         page.drawText(
-          `${row.key} | Records: ${row.records} | Planned: ${row.plannedQty} | Net: ${row.netProduction} | Efficiency: ${row.efficiencyPct}%`,
+          `${row.label || row.key} | Records: ${row.records} | Planned: ${row.plannedQty} | Net: ${row.netProduction} | Efficiency: ${row.efficiencyPct}%`,
           {
             x: 30,
             y,
@@ -1555,17 +1577,17 @@ function App() {
                 <button className="btn-primary" onClick={runReport} type="button">
                   🔍 Generate Report
                 </button>
-                <button className="btn-muted" onClick={exportReportExcel} disabled={reportData.length === 0} type="button">
+                <button className="btn-muted" onClick={exportReportExcel} disabled={(reportFilters.type === 'monitoring' ? monitoringRows : reportData).length === 0} type="button">
                   📊 Export Excel (.xlsx)
                 </button>
-                <button className="btn-muted" onClick={exportReportPdf} disabled={reportData.length === 0} type="button">
+                <button className="btn-muted" onClick={exportReportPdf} disabled={(reportFilters.type === 'monitoring' ? monitoringRows : reportData).length === 0} type="button">
                   📄 Export PDF
                 </button>
               </div>
             </div>
 
             {/* Production Monitoring Table - Show if data exists */}
-            {reportData.length > 0 && reportFilters.type === 'monitoring' ? (
+            {monitoringRows.length > 0 && reportFilters.type === 'monitoring' ? (
               <div className="card">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold">
@@ -1583,7 +1605,7 @@ function App() {
                           </th>
                         ))}
                         <th className="actual-head" colSpan={monitoringHourCount + 1}>
-                          Actual&nbsp; Qty-Date-{formatDisplayDate(reportFilters.date || reportData[0]?.date)}
+                          Actual&nbsp; Qty-Date-{formatDisplayDate(reportFilters.date || monitoringRows[0]?.date)}
                         </th>
                         {monitoringColumns.slice(21).map((column) => (
                           <th className={column.vertical ? 'vertical-head' : ''} key={column.key} rowSpan={2}>
@@ -1638,7 +1660,7 @@ function App() {
                     <ResponsiveContainer>
                       <BarChart data={reportData}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="key" />
+                        <XAxis dataKey="label" />
                         <YAxis />
                         <Tooltip />
                         <Legend />
@@ -1669,7 +1691,7 @@ function App() {
                     <tbody>
                       {reportData.map((item) => (
                         <tr key={item.key}>
-                          <BodyCell className="font-semibold">{item.key}</BodyCell>
+                          <BodyCell className="font-semibold">{item.label || item.key}</BodyCell>
                           <BodyCell>{item.records}</BodyCell>
                           <BodyCell>{item.plannedQty}</BodyCell>
                           <BodyCell>{item.totalProduction}</BodyCell>
