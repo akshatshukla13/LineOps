@@ -1,4 +1,5 @@
 import express from 'express';
+import { pathToFileURL } from 'node:url';
 import { corsOptions } from './middleware/cors.js';
 import { apiLimiter, loginLimiter } from './config/rateLimits.js';
 import { PORT, IS_PRODUCTION, JWT_SECRET, ADMIN_PASSWORD } from './config/env.js';
@@ -14,7 +15,7 @@ import reportsRoutes from './routes/reports.js';
 import auditLogsRoutes from './routes/auditLogs.js';
 import notificationsRoutes from './routes/notifications.js';
 
-const app = express();
+export const app = express();
 
 // Validation checks for production
 if (IS_PRODUCTION && !JWT_SECRET) {
@@ -54,7 +55,7 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'Internal server error.' });
 });
 
-const start = async () => {
+export const start = async () => {
   await ensureDbConnection();
   await seedInitialData();
 
@@ -63,7 +64,11 @@ const start = async () => {
   });
 };
 
-start().catch((error) => {
-  console.error('Failed to start server', error);
-  process.exit(1);
-});
+const isDirectExecution = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+
+if (isDirectExecution) {
+  start().catch((error) => {
+    console.error('Failed to start server', error);
+    process.exit(1);
+  });
+}
