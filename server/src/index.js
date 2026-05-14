@@ -1,18 +1,18 @@
 import express from 'express';
-import { corsOptions } from './src/middleware/cors.js';
-import { apiLimiter, loginLimiter } from './src/config/rateLimits.js';
-import { PORT, IS_PRODUCTION, JWT_SECRET, ADMIN_PASSWORD } from './src/config/env.js';
-import { ensureDbConnection } from './src/db/connection.js';
-import { seedInitialData } from './src/db/seed.js';
+import { corsOptions } from './middleware/cors.js';
+import { apiLimiter, loginLimiter } from './config/rateLimits.js';
+import { PORT, IS_PRODUCTION, JWT_SECRET, ADMIN_PASSWORD } from './config/env.js';
+import { ensureDbConnection } from './db/connection.js';
+import { seedInitialData } from './db/seed.js';
 
 // Import routes
-import authRoutes from './src/routes/auth.js';
-import usersRoutes from './src/routes/users.js';
-import masterRoutes from './src/routes/master.js';
-import entriesRoutes from './src/routes/entries.js';
-import reportsRoutes from './src/routes/reports.js';
-import auditLogsRoutes from './src/routes/auditLogs.js';
-import notificationsRoutes from './src/routes/notifications.js';
+import authRoutes from './routes/auth.js';
+import usersRoutes from './routes/users.js';
+import masterRoutes from './routes/master.js';
+import entriesRoutes from './routes/entries.js';
+import reportsRoutes from './routes/reports.js';
+import auditLogsRoutes from './routes/auditLogs.js';
+import notificationsRoutes from './routes/notifications.js';
 
 const app = express();
 

@@ -248,6 +248,45 @@ const normalizeHourlyInputs = (values = []) => {
   return [...values.map((n) => Number(n || 0)), ...Array(12).fill(0)].slice(0, 12);
 };
 
+const formatDisplayDate = (value) => {
+  if (!value) return '';
+  const [year, month, day] = String(value).slice(0, 10).split('-');
+  return year && month && day ? `${day}.${month}.${year}` : value;
+};
+
+const getMasterLabel = (value, fallback = '-') => value?.name || value?.code || fallback;
+
+const getShiftCode = (value) => {
+  const label = getMasterLabel(value, '');
+  const compact = label.replace(/^shift\s+/i, '').trim();
+  return compact ? compact.charAt(0).toUpperCase() : '-';
+};
+
+const toMonitoringExportRow = (entry, index) => {
+  const hourlyInputs = [...(entry.hourlyInputs || []), ...Array(12).fill('')].slice(0, 12);
+  const total = entry.totalProduction ?? hourlyInputs.reduce((sum, value) => sum + Number(value || 0), 0);
+
+  return {
+    sno: index + 1,
+    lineNo: entry.lineId?.code || entry.lineId?.name?.replace(/\D+/g, '') || getMasterLabel(entry.lineId, ''),
+    machine: getMasterLabel(entry.machineId),
+    operatorName: getMasterLabel(entry.operatorId),
+    processName: getMasterLabel(entry.processId),
+    shift: getShiftCode(entry.shiftId),
+    hours: entry.scheduledHours || 8,
+    targetQty: entry.plannedQty ?? 0,
+    actualQtyDate: formatDisplayDate(entry.date),
+    actualQty: hourlyInputs,
+    total,
+    rejected: entry.rejectQty || '',
+    rework: entry.reworkQty || '',
+    downtimeMinutes: entry.downtimeMinutes || '',
+    reason: entry.downtimeReasonId?.name || entry.downtimeOtherText || '',
+    efficiency: `${Math.round(Number(entry.efficiencyPct || 0))}%`,
+    remarks: entry.remarks || '',
+  };
+};
+
 const recordAudit = async (actorId, action, entity, entityId, metadata = {}) => {
   await AuditLog.create({ actorId, action, entity, entityId: String(entityId), metadata });
 };
@@ -924,7 +963,13 @@ app.get('/api/reports', authMiddleware, async (req, res) => {
       .sort({ date: -1, shiftId: 1 })
       .lean();
 
-    return res.json({ type, totalRows: entries.length, report: entries, sourceCount: entries.length });
+    return res.json({
+      type,
+      totalRows: entries.length,
+      report: entries,
+      spreadsheetRows: entries.map(toMonitoringExportRow),
+      sourceCount: entries.length,
+    });
   }
 
   // For other report types, return aggregated data

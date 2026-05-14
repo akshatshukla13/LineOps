@@ -148,6 +148,67 @@ const reportTypes = [
   { value: 'dateRange', label: 'Date Range Report' },
 ]
 
+const monitoringHourCount = 12
+const monitoringColumns = [
+  { key: 'sno', label: 'S.No.', width: 6, vertical: true },
+  { key: 'line', label: 'Line No.', width: 8, vertical: true },
+  { key: 'machine', label: 'Machine', width: 22 },
+  { key: 'operator', label: 'Operator Name', width: 24 },
+  { key: 'process', label: 'Process Name', width: 16 },
+  { key: 'shift', label: 'Shift', width: 6, vertical: true },
+  { key: 'hours', label: 'Hours', width: 6, vertical: true },
+  { key: 'target', label: 'Target Qty', width: 10, vertical: true },
+  ...Array.from({ length: monitoringHourCount }, (_, index) => ({
+    key: `h${index + 1}`,
+    label: String(index + 1),
+    width: 7,
+  })),
+  { key: 'total', label: 'T', width: 7 },
+  { key: 'rejected', label: 'Rejected', width: 7, vertical: true },
+  { key: 'rework', label: 'Rework', width: 7, vertical: true },
+  { key: 'downtime', label: 'Downtime (min)', width: 8, vertical: true },
+  { key: 'reason', label: 'Reason', width: 12, vertical: true },
+  { key: 'efficiency', label: 'Efficiency (%)', width: 10, vertical: true },
+  { key: 'remarks', label: 'Remarks', width: 16, vertical: true },
+]
+
+const formatDisplayDate = (value) => {
+  if (!value) return ''
+  const [year, month, day] = String(value).slice(0, 10).split('-')
+  return year && month && day ? `${day}.${month}.${year}` : value
+}
+
+const getMasterLabel = (value, fallback = '-') => value?.name || value?.code || fallback
+
+const getShiftCode = (value) => {
+  const label = getMasterLabel(value, '')
+  const compact = label.replace(/^shift\s+/i, '').trim()
+  return compact ? compact.charAt(0).toUpperCase() : '-'
+}
+
+const toMonitoringRow = (row, index) => {
+  const hourlyInputs = [...(row.hourlyInputs || []), ...Array(monitoringHourCount).fill('')].slice(0, monitoringHourCount)
+  const total = row.totalProduction ?? hourlyInputs.reduce((sum, value) => sum + Number(value || 0), 0)
+  return {
+    sno: index + 1,
+    line: row.lineId?.code || row.lineId?.name?.replace(/\D+/g, '') || getMasterLabel(row.lineId, '-'),
+    machine: getMasterLabel(row.machineId),
+    operator: getMasterLabel(row.operatorId),
+    process: getMasterLabel(row.processId),
+    shift: getShiftCode(row.shiftId),
+    hours: row.scheduledHours || 8,
+    target: row.plannedQty ?? 0,
+    hourlyInputs,
+    total,
+    rejected: row.rejectQty || '',
+    rework: row.reworkQty || '',
+    downtime: row.downtimeMinutes || '',
+    reason: row.downtimeReasonId?.name || row.downtimeOtherText || '',
+    efficiency: `${Math.round(Number(row.efficiencyPct || 0))}%`,
+    remarks: row.remarks || '',
+  }
+}
+
 const loginSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
@@ -229,6 +290,7 @@ function App() {
     operatorId: '',
     machineId: '',
     departmentId: '',
+    lineId: '',
   })
   const [reportData, setReportData] = useState([])
   const [missedEntries, setMissedEntries] = useState([])
@@ -346,6 +408,11 @@ function App() {
     if (calculated.efficiencyPct >= 70) return 'text-yellow-500'
     return 'text-rose-600'
   }, [calculated.efficiencyPct])
+
+  const monitoringRows = useMemo(
+    () => reportData.map((row, index) => toMonitoringRow(row, index)),
+    [reportData],
+  )
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -588,72 +655,69 @@ function App() {
   const exportReportExcel = async () => {
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Production Monitoring')
-    
-    // Check if it's a detailed monitoring report
-    if (reportFilters.type === 'monitoring' && reportData.length > 0) {
-      // Production Monitoring Table format (matching Excel format)
-      worksheet.columns = [
-        { header: 'S.No', key: 'sno', width: 8 },
-        { header: 'Date', key: 'date', width: 12 },
-        { header: 'Line', key: 'line', width: 15 },
-        { header: 'Machine', key: 'machine', width: 18 },
-        { header: 'Operator', key: 'operator', width: 18 },
-        { header: 'Process', key: 'process', width: 15 },
-        { header: 'Shift', key: 'shift', width: 12 },
-        { header: 'Target Qty', key: 'targetQty', width: 12 },
-        { header: 'H1', key: 'h1', width: 8 },
-        { header: 'H2', key: 'h2', width: 8 },
-        { header: 'H3', key: 'h3', width: 8 },
-        { header: 'H4', key: 'h4', width: 8 },
-        { header: 'H5', key: 'h5', width: 8 },
-        { header: 'H6', key: 'h6', width: 8 },
-        { header: 'H7', key: 'h7', width: 8 },
-        { header: 'H8', key: 'h8', width: 8 },
-        { header: 'H9', key: 'h9', width: 8 },
-        { header: 'H10', key: 'h10', width: 8 },
-        { header: 'H11', key: 'h11', width: 8 },
-        { header: 'H12', key: 'h12', width: 8 },
-        { header: 'H13', key: 'h13', width: 8 },
-        { header: 'Total', key: 'total', width: 10 },
-        { header: 'Rejected', key: 'rejected', width: 10 },
-        { header: 'Rework', key: 'rework', width: 10 },
-        { header: 'Downtime', key: 'downtime', width: 10 },
-        { header: 'Reason', key: 'reason', width: 15 },
-        { header: 'Efficiency %', key: 'efficiency', width: 12 },
-        { header: 'Remarks', key: 'remarks', width: 20 },
-      ]
 
-      reportData.forEach((row, idx) => {
-        const hourlyData = row.hourlyInputs || Array(13).fill(0)
-        worksheet.addRow({
-          sno: idx + 1,
-          date: row.date,
-          line: row.lineId?.name || '-',
-          machine: row.machineId?.name || '-',
-          operator: row.operatorId?.name || '-',
-          process: row.processId?.name || '-',
-          shift: row.shiftId?.name || '-',
-          targetQty: row.plannedQty,
-          h1: hourlyData[0] || 0,
-          h2: hourlyData[1] || 0,
-          h3: hourlyData[2] || 0,
-          h4: hourlyData[3] || 0,
-          h5: hourlyData[4] || 0,
-          h6: hourlyData[5] || 0,
-          h7: hourlyData[6] || 0,
-          h8: hourlyData[7] || 0,
-          h9: hourlyData[8] || 0,
-          h10: hourlyData[9] || 0,
-          h11: hourlyData[10] || 0,
-          h12: hourlyData[11] || 0,
-          h13: hourlyData[12] || 0,
-          total: row.totalProduction || 0,
-          rejected: row.rejectQty || 0,
-          rework: row.reworkQty || 0,
-          downtime: row.downtimeMinutes || 0,
-          reason: row.downtimeReasonId?.name || '-',
-          efficiency: row.efficiencyPct || 0,
-          remarks: row.remarks || '-',
+    if (reportFilters.type === 'monitoring' && reportData.length > 0) {
+      const firstHourColumn = 9
+      const totalColumn = firstHourColumn + monitoringHourCount
+      const reportDate = formatDisplayDate(reportFilters.date || reportData[0]?.date)
+
+      worksheet.columns = monitoringColumns.map((column) => ({ key: column.key, width: column.width }))
+      worksheet.mergeCells(1, firstHourColumn, 1, totalColumn)
+      worksheet.getCell(1, firstHourColumn).value = `Actual  Qty-Date-${reportDate}`
+
+      monitoringColumns.forEach((column, index) => {
+        const columnNumber = index + 1
+        const isActualColumn = columnNumber >= firstHourColumn && columnNumber <= totalColumn
+        const cell = worksheet.getCell(isActualColumn ? 2 : 1, columnNumber)
+        cell.value = column.label
+        cell.alignment = {
+          horizontal: 'center',
+          vertical: 'middle',
+          textRotation: column.vertical ? 90 : 0,
+          wrapText: true,
+        }
+
+        if (!isActualColumn) {
+          worksheet.mergeCells(1, columnNumber, 2, columnNumber)
+        }
+      })
+
+      reportData.map(toMonitoringRow).forEach((row) => {
+        worksheet.addRow([
+          row.sno,
+          row.line,
+          row.machine,
+          row.operator,
+          row.process,
+          row.shift,
+          row.hours,
+          row.target,
+          ...row.hourlyInputs.map((value) => value || ''),
+          row.total,
+          row.rejected,
+          row.rework,
+          row.downtime,
+          row.reason,
+          row.efficiency,
+          row.remarks,
+        ])
+      })
+
+      worksheet.getRow(1).height = 28
+      worksheet.getRow(2).height = 46
+      worksheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' },
+          }
+          cell.alignment = cell.alignment || { horizontal: 'center', vertical: 'middle', wrapText: true }
+          if (rowNumber <= 2) {
+            cell.font = { bold: true }
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } }
+          }
         })
       })
     } else {
@@ -690,7 +754,7 @@ function App() {
 
   const exportReportPdf = async () => {
     const pdfDoc = await PDFDocument.create()
-    const page = pdfDoc.addPage([842, 595])
+    let page = pdfDoc.addPage([842, 595])
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
     
@@ -711,14 +775,12 @@ function App() {
     })
 
     let y = 520
-    const pageHeight = 595
     const lineHeight = 14
     const marginBottom = 20
 
     reportData.slice(0, 40).forEach((row) => {
       if (y < marginBottom) {
-        // Create new page if needed
-        const newPage = pdfDoc.addPage([842, 595])
+        page = pdfDoc.addPage([842, 595])
         y = 570
       }
 
@@ -958,42 +1020,81 @@ function App() {
     )
   }
 
+  const navigationTabs = [
+    { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { id: 'entry', label: 'Data Entry', icon: 'table_chart' },
+    { id: 'reports', label: 'Reports', icon: 'insert_chart' },
+    ...(canUseAdmin ? [
+      { id: 'users', label: 'Users', icon: 'group' },
+      { id: 'master', label: 'Admin Control', icon: 'settings' },
+    ] : []),
+    ...(canUseSupervisorViews ? [{ id: 'audit', label: 'Audit Logs', icon: 'history' }] : []),
+  ]
+
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-3 py-3 md:px-6">
-          <h1 className="mr-auto text-sm font-semibold md:text-lg">Smart Production Monitoring System</h1>
-          <span className="rounded-full bg-slate-200 px-3 py-1 text-xs capitalize dark:bg-slate-800">
-            {user.role}
-          </span>
-          <button className="btn-muted" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} type="button">
-            {theme === 'light' ? 'Dark' : 'Light'} Mode
-          </button>
-          <button className="btn-muted" onClick={handleLogout} type="button">
-            Logout
-          </button>
+    <div className="min-h-screen bg-[#f8f9fa] text-[#191c1d] dark:bg-slate-950 dark:text-slate-100 md:flex">
+      <aside className="hidden w-72 shrink-0 border-r border-[#c3c6d1] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950 md:flex md:min-h-screen md:flex-col">
+        <div className="border-b border-[#c3c6d1] px-6 py-7 dark:border-slate-800">
+          <div className="text-2xl font-black text-[#001e40] dark:text-blue-200">STITCH<span className="text-[#3a5f94]">OPS</span></div>
+          <p className="mt-1 text-xs font-semibold uppercase text-[#43474f] dark:text-slate-400">Manufacturing Data Hub</p>
         </div>
-        <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-3 pb-3 md:px-6">
-          {[
-            { id: 'dashboard', label: 'Dashboard' },
-            { id: 'entry', label: 'Data Entry' },
-            { id: 'reports', label: 'Reports' },
-            ...(canUseAdmin ? [{ id: 'users', label: 'Users' }, { id: 'master', label: 'Master Data' }] : []),
-            ...(canUseSupervisorViews ? [{ id: 'audit', label: 'Audit Logs' }] : []),
-          ].map((tab) => (
+        <nav className="flex flex-1 flex-col gap-2 p-4">
+          {navigationTabs.map((tab) => (
             <button
-              className={`btn ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-100'}`}
+              className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-semibold transition ${
+                activeTab === tab.id
+                  ? 'bg-[#d0e1fb] text-[#001e40]'
+                  : 'text-[#43474f] hover:bg-[#f3f4f5] dark:text-slate-300 dark:hover:bg-slate-900'
+              }`}
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               type="button"
             >
+              <span className="material-symbols-outlined text-[20px]">{tab.icon}</span>
               {tab.label}
             </button>
           ))}
+        </nav>
+        <div className="border-t border-[#c3c6d1] p-4 dark:border-slate-800">
+          <div className="mb-3 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#003366] text-sm font-bold text-white">
+              {user.fullName?.slice(0, 2).toUpperCase() || 'OP'}
+            </div>
+            <div>
+              <div className="text-sm font-bold">{user.fullName || user.username}</div>
+              <div className="text-xs capitalize text-[#43474f] dark:text-slate-400">{user.role}</div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn-muted flex-1" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} type="button">
+              {theme === 'light' ? 'Dark' : 'Light'}
+            </button>
+            <button className="btn-muted flex-1" onClick={handleLogout} type="button">Logout</button>
+          </div>
         </div>
-      </header>
+      </aside>
 
-      <main className="mx-auto grid max-w-7xl gap-4 p-3 md:p-6">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-40 border-b border-[#c3c6d1] bg-white/95 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/90 md:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-lg font-black text-[#001e40] dark:text-blue-200">STITCHOPS</div>
+            <button className="btn-muted" onClick={handleLogout} type="button">Logout</button>
+          </div>
+          <div className="mt-3 flex gap-2 overflow-x-auto">
+            {navigationTabs.map((tab) => (
+              <button
+                className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${activeTab === tab.id ? 'bg-[#d0e1fb] text-[#001e40]' : 'bg-[#f3f4f5] text-[#43474f]'}`}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                type="button"
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </header>
+
+      <main className="grid w-full gap-4 p-4 md:p-8">
         {statusText ? <div className="card text-sm text-emerald-600">{statusText}</div> : null}
         {errorText ? <div className="card text-sm text-rose-600">{errorText}</div> : null}
 
@@ -1320,7 +1421,7 @@ function App() {
                       <input className="input" onChange={(e) => changeReportFilter('date', e.target.value)} type="date" value={reportFilters.date} />
                     </div>
                     <SelectField label="Department" options={optionsByKind('department')} onChange={(v) => changeReportFilter('departmentId', v)} value={reportFilters.departmentId} />
-                    <SelectField label="Line" options={optionsByKind('line')} onChange={(v) => changeReportFilter('machineId', v)} value={reportFilters.machineId} />
+                    <SelectField label="Line" options={optionsByKind('line')} onChange={(v) => changeReportFilter('lineId', v)} value={reportFilters.lineId} />
                     <SelectField label="Shift" options={optionsByKind('shift')} onChange={(v) => changeReportFilter('shiftId', v)} value={reportFilters.shiftId} />
                   </>
                 ) : (
@@ -1353,56 +1454,66 @@ function App() {
 
             {/* Production Monitoring Table - Show if data exists */}
             {reportData.length > 0 && reportFilters.type === 'monitoring' ? (
-              <div className="card overflow-x-auto">
-                <h3 className="mb-3 text-sm font-semibold">
-                  Production Monitoring Table - {reportFilters.date}
-                </h3>
-                <table className="min-w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-200 dark:bg-slate-800">
-                      <HeaderCell text="Line" />
-                      <HeaderCell text="Machine" />
-                      <HeaderCell text="Operator" />
-                      <HeaderCell text="Process" />
-                      <HeaderCell text="Shift" />
-                      <HeaderCell text="Target" />
-                      {Array.from({ length: 13 }, (_, i) => (
-                        <HeaderCell key={`hr${i + 1}`} text={`H${i + 1}`} />
-                      ))}
-                      <HeaderCell text="Total" />
-                      <HeaderCell text="Reject" />
-                      <HeaderCell text="Rework" />
-                      <HeaderCell text="DT(min)" />
-                      <HeaderCell text="Reason" />
-                      <HeaderCell text="Eff %" />
-                      <HeaderCell text="Remarks" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reportData.map((item, idx) => (
-                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-800'}>
-                        <BodyCell>{item.lineId?.name || 'N/A'}</BodyCell>
-                        <BodyCell>{item.machineId?.name || 'N/A'}</BodyCell>
-                        <BodyCell>{item.operatorId?.name || 'N/A'}</BodyCell>
-                        <BodyCell>{item.processId?.name || 'N/A'}</BodyCell>
-                        <BodyCell>{item.shiftId?.name || 'N/A'}</BodyCell>
-                        <BodyCell className="font-semibold text-blue-600">{item.plannedQty}</BodyCell>
-                        {(item.hourlyInputs || Array(13).fill(0)).map((val, i) => (
-                          <BodyCell key={`h${i}`} className={val > 0 ? 'text-green-700 dark:text-green-400 font-semibold' : 'text-gray-400'}>
-                            {val || '-'}
-                          </BodyCell>
+              <div className="card">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">
+                    Production Monitoring Table - {formatDisplayDate(reportFilters.date)}
+                  </h3>
+                  <span className="text-xs text-slate-500">Excel export uses this same input/output format.</span>
+                </div>
+                <div className="monitoring-sheet overflow-x-auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        {monitoringColumns.slice(0, 8).map((column) => (
+                          <th className={column.vertical ? 'vertical-head' : ''} key={column.key} rowSpan={2}>
+                            {column.label}
+                          </th>
                         ))}
-                        <BodyCell className="font-semibold text-green-600">{item.totalProduction || 0}</BodyCell>
-                        <BodyCell className={item.rejectQty > 0 ? 'text-red-600 font-semibold' : ''}>{item.rejectQty}</BodyCell>
-                        <BodyCell className={item.reworkQty > 0 ? 'text-orange-600 font-semibold' : ''}>{item.reworkQty}</BodyCell>
-                        <BodyCell className={item.downtimeMinutes > 0 ? 'text-red-700 font-semibold' : ''}>{item.downtimeMinutes}</BodyCell>
-                        <BodyCell>{item.downtimeReasonId?.name || '-'}</BodyCell>
-                        <BodyCell className="font-semibold">{item.efficiencyPct || 0}%</BodyCell>
-                        <BodyCell className="text-xs">{item.remarks || '-'}</BodyCell>
+                        <th className="actual-head" colSpan={monitoringHourCount + 1}>
+                          Actual&nbsp; Qty-Date-{formatDisplayDate(reportFilters.date || reportData[0]?.date)}
+                        </th>
+                        {monitoringColumns.slice(21).map((column) => (
+                          <th className={column.vertical ? 'vertical-head' : ''} key={column.key} rowSpan={2}>
+                            {column.label}
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                      <tr>
+                        {Array.from({ length: monitoringHourCount }, (_, index) => (
+                          <th className="hour-head" key={`hour-head-${index + 1}`}>
+                            {index + 1}
+                          </th>
+                        ))}
+                        <th className="hour-head">T</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monitoringRows.map((item) => (
+                        <tr key={`${item.sno}-${item.machine}-${item.operator}`}>
+                          <td>{item.sno}</td>
+                          <td>{item.line}</td>
+                          <td className="sheet-text">{item.machine}</td>
+                          <td className="sheet-text">{item.operator}</td>
+                          <td className="sheet-text">{item.process}</td>
+                          <td>{item.shift}</td>
+                          <td>{item.hours}</td>
+                          <td>{item.target}</td>
+                          {item.hourlyInputs.map((value, index) => (
+                            <td key={`${item.sno}-h-${index}`}>{value || ''}</td>
+                          ))}
+                          <td className="sheet-total">{item.total}</td>
+                          <td>{item.rejected}</td>
+                          <td>{item.rework}</td>
+                          <td>{item.downtime}</td>
+                          <td className="sheet-text">{item.reason}</td>
+                          <td>{item.efficiency}</td>
+                          <td className="sheet-text">{item.remarks}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : null}
 
@@ -1775,6 +1886,7 @@ function App() {
           </section>
         ) : null}
       </main>
+      </div>
     </div>
   )
 }
@@ -1783,8 +1895,8 @@ function HeaderCell({ text }) {
   return <th className="border-b border-slate-300 p-2 text-left font-semibold dark:border-slate-700">{text}</th>
 }
 
-function BodyCell({ children }) {
-  return <td className="border-b border-slate-200 p-2 align-top dark:border-slate-800">{children}</td>
+function BodyCell({ children, className = '' }) {
+  return <td className={`border-b border-slate-200 p-2 align-top dark:border-slate-800 ${className}`}>{children}</td>
 }
 
 function SelectField({ label, value, onChange, options }) {
