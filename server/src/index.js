@@ -18,6 +18,8 @@ import notificationsRoutes from './routes/notifications.js';
 export const app = express();
 export default app;
 
+app.set('trust proxy', 1);
+
 // Validation checks for production
 if (IS_PRODUCTION && !JWT_SECRET) {
   throw new Error('JWT_SECRET is required in production.');
