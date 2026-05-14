@@ -1,6 +1,10 @@
 import cors from 'cors';
 import { FRONTEND_URL, IS_PRODUCTION, ALLOWED_ORIGINS } from '../config/env.js';
 
+const DEPLOYED_FRONTEND_ORIGINS = new Set([
+  'https://line-ops-d12k.vercel.app',
+]);
+
 export const corsOptions = cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
@@ -9,7 +13,7 @@ export const corsOptions = cors({
       return callback(null, true);
     }
     
-    if (ALLOWED_ORIGINS.includes(origin)) {
+    if (ALLOWED_ORIGINS.includes(origin) || DEPLOYED_FRONTEND_ORIGINS.has(origin)) {
       return callback(null, true);
     }
     
