@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -210,6 +210,13 @@ const toMonitoringRow = (row, index) => {
   }
 }
 
+const getLoadingMessage = (path, method = 'GET') => {
+  const normalizedMethod = String(method || 'GET').toUpperCase()
+  if (path.includes('/api/auth/login')) return 'Signing in...'
+  if (normalizedMethod === 'GET') return 'Loading data...'
+  return 'Saving changes...'
+}
+
 const loginSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
@@ -299,6 +306,8 @@ function App() {
   const [isSavingDraft, setIsSavingDraft] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
   const [editReason, setEditReason] = useState('')
+  const [requestCount, setRequestCount] = useState(0)
+  const [loadingMessage, setLoadingMessage] = useState('')
   const [masterForm, setMasterForm] = useState({
     kind: 'department',
     name: '',
@@ -309,6 +318,7 @@ function App() {
     machineId: '',
   })
   const [masterSearch, setMasterSearch] = useState('')
+  const loadingResetRef = useRef(null)
 
   const loginForm = useForm({
     resolver: zodResolver(loginSchema),
@@ -330,27 +340,63 @@ function App() {
 
   const autoSaveRef = useRef(null)
 
-  const authFetch = async (path, options = {}) => {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers || {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    })
+  const isLoading = requestCount > 0
 
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}))
-      throw new Error(data.error || `Request failed (${response.status})`)
+  useEffect(() => {
+    if (requestCount > 0) {
+      if (loadingResetRef.current) {
+        window.clearTimeout(loadingResetRef.current)
+        loadingResetRef.current = null
+      }
+      return undefined
     }
 
-    if (response.status === 204) {
-      return null
+    loadingResetRef.current = window.setTimeout(() => setLoadingMessage(''), 150)
+    return () => {
+      if (loadingResetRef.current) {
+        window.clearTimeout(loadingResetRef.current)
+        loadingResetRef.current = null
+      }
     }
+  }, [requestCount])
 
-    return response.json()
-  }
+  const beginRequest = useCallback((message) => {
+    setRequestCount((count) => count + 1)
+    setLoadingMessage((current) => current || message)
+  }, [])
+
+  const endRequest = useCallback(() => {
+    setRequestCount((count) => Math.max(0, count - 1))
+  }, [])
+
+  const authFetch = useCallback(async (path, options = {}) => {
+    const method = options.method || 'GET'
+    beginRequest(getLoadingMessage(path, method))
+
+    try {
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(options.headers || {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || `Request failed (${response.status})`)
+      }
+
+      if (response.status === 204) {
+        return null
+      }
+
+      return response.json()
+    } finally {
+      endRequest()
+    }
+  }, [beginRequest, endRequest, token])
 
   const optionsByKind = (kind) => masters[kind] || []
 
@@ -496,6 +542,7 @@ function App() {
     setErrorText('')
     setStatusText('Signing in...')
     try {
+      beginRequest('Signing in...')
       const data = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -516,6 +563,8 @@ function App() {
     } catch (error) {
       setErrorText(error.message)
       setStatusText('')
+    } finally {
+      endRequest()
     }
   })
 
@@ -1002,34 +1051,49 @@ function App() {
 
   const canUseAdmin = user?.role === 'admin'
   const canUseSupervisorViews = ['admin', 'supervisor'].includes(user?.role || '')
+  const loadingBar = isLoading ? (
+    <div className="pointer-events-none fixed inset-x-0 top-0" style={{ zIndex: 60 }}>
+      <div className="loading-rail h-1 overflow-hidden bg-slate-200/90 dark:bg-slate-800/90">
+        <div className="loading-rail__bar h-full w-full" />
+      </div>
+      <div className="flex justify-end px-4 pt-2 sm:px-6">
+        <div className="loading-pill">{loadingMessage || 'Working...'}</div>
+      </div>
+    </div>
+  ) : null
 
   if (!token || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4 dark:bg-slate-900">
-        <div className="card w-full max-w-md space-y-4">
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Smart Production Monitoring System</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-300">Sign in with your assigned credentials.</p>
-          <form className="space-y-3" onSubmit={handleLogin}>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Username</label>
-              <input className="input" {...loginForm.register('username')} />
-              {loginForm.formState.errors.username ? (
-                <p className="mt-1 text-xs text-rose-600">{loginForm.formState.errors.username.message}</p>
-              ) : null}
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Password</label>
-              <input className="input" type="password" {...loginForm.register('password')} />
-              {loginForm.formState.errors.password ? (
-                <p className="mt-1 text-xs text-rose-600">{loginForm.formState.errors.password.message}</p>
-              ) : null}
-            </div>
-            <button className="btn-primary w-full" type="submit">Sign In</button>
-          </form>
-          {statusText ? <p className="text-xs text-emerald-600">{statusText}</p> : null}
-          {errorText ? <p className="text-xs text-rose-600">{errorText}</p> : null}
+      <>
+        {loadingBar}
+        <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4 dark:bg-slate-900">
+          <div className="card w-full max-w-md space-y-4">
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Smart Production Monitoring System</h1>
+            <p className="text-sm text-slate-600 dark:text-slate-300">Sign in with your assigned credentials.</p>
+            <form className="space-y-3" onSubmit={handleLogin}>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Username</label>
+                <input className="input" {...loginForm.register('username')} />
+                {loginForm.formState.errors.username ? (
+                  <p className="mt-1 text-xs text-rose-600">{loginForm.formState.errors.username.message}</p>
+                ) : null}
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Password</label>
+                <input className="input" type="password" {...loginForm.register('password')} />
+                {loginForm.formState.errors.password ? (
+                  <p className="mt-1 text-xs text-rose-600">{loginForm.formState.errors.password.message}</p>
+                ) : null}
+              </div>
+              <button className="btn-primary w-full" disabled={isLoading} type="submit">
+                {isLoading ? 'Signing In...' : 'Sign In'}
+              </button>
+            </form>
+            {statusText ? <p className="text-xs text-emerald-600">{statusText}</p> : null}
+            {errorText ? <p className="text-xs text-rose-600">{errorText}</p> : null}
+          </div>
         </div>
-      </div>
+      </>
     )
   }
 
@@ -1047,6 +1111,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-[#191c1d] dark:bg-slate-950 dark:text-slate-100 md:flex">
+      {loadingBar}
       <aside className="hidden w-72 shrink-0 border-r border-[#c3c6d1] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950 md:flex md:min-h-screen md:flex-col">
         <div className="border-b border-[#c3c6d1] px-6 py-7 dark:border-slate-800">
           <div className="text-2xl font-black text-[#001e40] dark:text-blue-200">STITCH<span className="text-[#3a5f94]">OPS</span></div>
@@ -1294,7 +1359,7 @@ function App() {
                 />
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[1100px] text-xs">
+                <table className="text-xs" style={{ minWidth: '1100px' }}>
                   <thead className="sticky top-0 bg-slate-200 dark:bg-slate-800">
                     <tr>
                       <HeaderCell text="Date" />
