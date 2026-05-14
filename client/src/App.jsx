@@ -225,6 +225,8 @@ const getLoadingMessage = (path, method = 'GET') => {
   return 'Saving changes...'
 }
 
+const UNSPECIFIED_TOKEN = '__UNSPECIFIED__'
+
 const loginSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
@@ -712,7 +714,7 @@ function App() {
   const runReport = async () => {
     const query = new URLSearchParams()
     Object.entries(reportFilters).forEach(([key, value]) => {
-      if (value) query.set(key, value)
+      if (value && value !== UNSPECIFIED_TOKEN) query.set(key, value)
     })
 
     try {
@@ -2107,6 +2109,7 @@ function SelectField({ label, value, onChange, options }) {
       <label className="mb-1 block text-xs font-semibold">{label}</label>
       <select className="select" onChange={(e) => onChange(e.target.value)} value={value || ''}>
         <option value="">Select {label}</option>
+        <option value={UNSPECIFIED_TOKEN}>Unspecified</option>
         {options.map((item) => (
           <option key={item._id} value={item._id}>{item.name}</option>
         ))}
