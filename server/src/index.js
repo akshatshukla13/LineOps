@@ -16,6 +16,7 @@ import auditLogsRoutes from './routes/auditLogs.js';
 import notificationsRoutes from './routes/notifications.js';
 
 export const app = express();
+export default app;
 
 // Validation checks for production
 if (IS_PRODUCTION && !JWT_SECRET) {
