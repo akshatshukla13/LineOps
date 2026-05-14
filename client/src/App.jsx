@@ -191,12 +191,13 @@ const toMonitoringRow = (row, index) => {
   const total = row.totalProduction ?? hourlyInputs.reduce((sum, value) => sum + Number(value || 0), 0)
   return {
     sno: index + 1,
-    line: row.lineId?.code || row.lineId?.name?.replace(/\D+/g, '') || getMasterLabel(row.lineId, '-'),
+    date: formatDisplayDate(row.date),
+    line: row.sheetLineNo || row.lineId?.code || row.lineId?.name?.replace(/\D+/g, '') || getMasterLabel(row.lineId, '-'),
     machine: getMasterLabel(row.machineId),
     operator: getMasterLabel(row.operatorId),
     process: getMasterLabel(row.processId),
-    shift: getShiftCode(row.shiftId),
-    hours: row.scheduledHours || 8,
+    shift: row.sheetShift ?? getShiftCode(row.shiftId),
+    hours: row.scheduledHours ?? 8,
     target: row.plannedQty ?? 0,
     hourlyInputs,
     total,
@@ -293,6 +294,7 @@ function App() {
     lineId: '',
   })
   const [reportData, setReportData] = useState([])
+  const [dbSheetData, setDbSheetData] = useState([])
   const [missedEntries, setMissedEntries] = useState([])
   const [isSavingDraft, setIsSavingDraft] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
@@ -414,6 +416,11 @@ function App() {
     [reportData],
   )
 
+  const dbSheetRows = useMemo(
+    () => dbSheetData.map((row, index) => toMonitoringRow(row, index)),
+    [dbSheetData],
+  )
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     localStorage.setItem(THEME_KEY, theme)
@@ -431,6 +438,11 @@ function App() {
   const loadEntries = async () => {
     const data = await authFetch('/api/entries')
     setEntries(data)
+  }
+
+  const loadDbSheet = async () => {
+    const data = await authFetch('/api/reports?type=monitoring')
+    setDbSheetData(data.report || [])
   }
 
   const loadUsers = async () => {
@@ -454,7 +466,7 @@ function App() {
   const bootstrap = async () => {
     try {
       setErrorText('')
-      await Promise.all([loadMasters(), loadEntries(), loadUsers(), loadAuditLogs(), loadMissedEntries()])
+      await Promise.all([loadMasters(), loadEntries(), loadDbSheet(), loadUsers(), loadAuditLogs(), loadMissedEntries()])
     } catch (error) {
       setErrorText(error.message)
     }
@@ -473,6 +485,7 @@ function App() {
     setUser(null)
     setActiveTab('dashboard')
     setEntries([])
+    setDbSheetData([])
     setUsers([])
     setMasters({})
     setAuditLogs([])
@@ -539,7 +552,7 @@ function App() {
       setStatusText('Saved')
       setEntryDraft(emptyEntry())
       setEntryHistory([])
-      await loadEntries()
+      await Promise.all([loadEntries(), loadDbSheet()])
     } catch (error) {
       setErrorText(error.message)
       setStatusText('Error')
@@ -558,7 +571,7 @@ function App() {
         body: JSON.stringify({ ...patch, editReason }),
       })
       setStatusText('Row updated')
-      await loadEntries()
+      await Promise.all([loadEntries(), loadDbSheet()])
     } catch (error) {
       setErrorText(error.message)
     }
@@ -567,7 +580,7 @@ function App() {
   const lockEntry = async (id) => {
     try {
       await authFetch(`/api/entries/${id}/lock`, { method: 'POST' })
-      await loadEntries()
+      await Promise.all([loadEntries(), loadDbSheet()])
     } catch (error) {
       setErrorText(error.message)
     }
@@ -576,7 +589,7 @@ function App() {
   const unlockEntry = async (id) => {
     try {
       await authFetch(`/api/entries/${id}/unlock`, { method: 'POST' })
-      await loadEntries()
+      await Promise.all([loadEntries(), loadDbSheet()])
     } catch (error) {
       setErrorText(error.message)
     }
@@ -593,7 +606,7 @@ function App() {
           shiftId: entryDraft.shiftId || undefined,
         }),
       })
-      await loadEntries()
+      await Promise.all([loadEntries(), loadDbSheet()])
       setStatusText('Previous day setup cloned.')
     } catch (error) {
       setErrorText(error.message)
@@ -1023,6 +1036,7 @@ function App() {
   const navigationTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { id: 'entry', label: 'Data Entry', icon: 'table_chart' },
+    { id: 'dbSheet', label: 'DB Excel View', icon: 'grid_on' },
     { id: 'reports', label: 'Reports', icon: 'insert_chart' },
     ...(canUseAdmin ? [
       { id: 'users', label: 'Users', icon: 'group' },
@@ -1094,7 +1108,7 @@ function App() {
           </div>
         </header>
 
-      <main className="grid w-full gap-4 p-4 md:p-8">
+      <main className="grid min-w-0 w-full max-w-full gap-4 overflow-x-hidden p-4 md:p-8">
         {statusText ? <div className="card text-sm text-emerald-600">{statusText}</div> : null}
         {errorText ? <div className="card text-sm text-rose-600">{errorText}</div> : null}
 
@@ -1136,7 +1150,7 @@ function App() {
         ) : null}
 
         {activeTab === 'entry' ? (
-          <section className="grid gap-4">
+          <section className="grid min-w-0 gap-4">
             <div className="card">
               <h2 className="mb-3 text-base font-semibold">Daily Production Entry</h2>
               <div className="grid gap-3 md:grid-cols-4">
@@ -1395,6 +1409,39 @@ function App() {
                 }}
               />
             ) : null}
+          </section>
+        ) : null}
+
+        {activeTab === 'dbSheet' ? (
+          <section className="grid gap-4">
+            <div className="card">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold">Database Excel View</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    All role-visible production entries in one spreadsheet-style table.
+                  </p>
+                </div>
+                <button className="btn-primary" onClick={loadDbSheet} type="button">
+                  Refresh DB View
+                </button>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">All Entries - {dbSheetRows.length} rows</h3>
+                <span className="text-xs text-slate-500">Includes Date, 1-12 hourly actuals, total, quality, downtime, and remarks.</span>
+              </div>
+
+              {dbSheetRows.length > 0 ? (
+                <ExcelSheet rows={dbSheetRows} includeDate title="Actual Qty-Date-All Entries" />
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                  No production entries found in the database for your role.
+                </div>
+              )}
+            </div>
           </section>
         ) : null}
 
@@ -1887,6 +1934,74 @@ function App() {
         ) : null}
       </main>
       </div>
+    </div>
+  )
+}
+
+function ExcelSheet({ rows, includeDate = false, title }) {
+  const leadingColumns = includeDate
+    ? [
+        monitoringColumns[0],
+        { key: 'date', label: 'Date', width: 12 },
+        ...monitoringColumns.slice(1, 8),
+      ]
+    : monitoringColumns.slice(0, 8)
+  const trailingColumns = monitoringColumns.slice(21)
+
+  return (
+    <div className={`monitoring-sheet ${includeDate ? 'db-excel-sheet' : ''} overflow-auto`}>
+      <table>
+        <thead>
+          <tr>
+            {leadingColumns.map((column) => (
+              <th className={column.vertical ? 'vertical-head' : ''} key={column.key} rowSpan={2}>
+                {column.label}
+              </th>
+            ))}
+            <th className="actual-head" colSpan={monitoringHourCount + 1}>
+              {title}
+            </th>
+            {trailingColumns.map((column) => (
+              <th className={column.vertical ? 'vertical-head' : ''} key={column.key} rowSpan={2}>
+                {column.label}
+              </th>
+            ))}
+          </tr>
+          <tr>
+            {Array.from({ length: monitoringHourCount }, (_, index) => (
+              <th className="hour-head" key={`hour-head-${index + 1}`}>
+                {index + 1}
+              </th>
+            ))}
+            <th className="hour-head">T</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((item) => (
+            <tr key={`${item.sno}-${item.date}-${item.machine}-${item.operator}`}>
+              <td>{item.sno}</td>
+              {includeDate ? <td>{item.date}</td> : null}
+              <td>{item.line}</td>
+              <td className="sheet-text">{item.machine}</td>
+              <td className="sheet-text">{item.operator}</td>
+              <td className="sheet-text">{item.process}</td>
+              <td>{item.shift}</td>
+              <td>{item.hours}</td>
+              <td>{item.target}</td>
+              {item.hourlyInputs.map((value, index) => (
+                <td key={`${item.sno}-h-${index}`}>{value || ''}</td>
+              ))}
+              <td className="sheet-total">{item.total}</td>
+              <td>{item.rejected}</td>
+              <td>{item.rework}</td>
+              <td>{item.downtime}</td>
+              <td className="sheet-text">{item.reason}</td>
+              <td>{item.efficiency}</td>
+              <td className="sheet-text">{item.remarks}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

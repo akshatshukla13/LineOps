@@ -9,6 +9,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .input,
@@ -27,12 +28,14 @@ body {
 }
 
 .card {
-  @apply rounded-lg border border-[#c3c6d1] bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950;
+  @apply min-w-0 rounded-lg border border-[#c3c6d1] bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950;
 }
 
 .monitoring-sheet {
+  max-width: 100%;
   border: 1px solid #111827;
   background: #fff;
+  overscroll-behavior: contain;
 }
 
 .monitoring-sheet table {
@@ -55,6 +58,9 @@ body {
 }
 
 .monitoring-sheet thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   height: 46px;
   background: #fff;
   font-weight: 700;
@@ -95,4 +101,77 @@ body {
   height: 0;
   border-top: 8px solid #138a25;
   border-right: 8px solid transparent;
+}
+
+.db-excel-sheet {
+  max-height: calc(100vh - 250px);
+  border-color: #c3c6d1;
+}
+
+.db-excel-sheet table {
+  min-width: 1460px;
+  font-size: 13px;
+  line-height: 1.1;
+}
+
+.db-excel-sheet th,
+.db-excel-sheet td {
+  height: 30px;
+  padding: 1px 5px;
+}
+
+.db-excel-sheet thead th {
+  height: 40px;
+  box-shadow: inset 0 -1px 0 #111;
+}
+
+.db-excel-sheet .actual-head {
+  font-size: 14px;
+}
+
+.db-excel-sheet .vertical-head {
+  width: 30px;
+}
+
+.db-excel-sheet .hour-head {
+  width: 38px;
+}
+
+.db-excel-sheet .sheet-text {
+  min-width: 92px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.db-excel-sheet th:nth-child(1),
+.db-excel-sheet td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  min-width: 42px;
+  background: #fff;
+}
+
+.db-excel-sheet th:nth-child(2),
+.db-excel-sheet td:nth-child(2) {
+  position: sticky;
+  left: 42px;
+  z-index: 3;
+  min-width: 88px;
+  background: #fff;
+}
+
+.db-excel-sheet th:nth-child(3),
+.db-excel-sheet td:nth-child(3) {
+  position: sticky;
+  left: 130px;
+  z-index: 3;
+  min-width: 56px;
+  background: #fff;
+  box-shadow: 1px 0 0 #111;
+}
+
+.db-excel-sheet thead th:nth-child(-n + 3) {
+  z-index: 4;
 }

@@ -57,6 +57,9 @@ export const productionEntrySchema = new mongoose.Schema(
     operatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', required: true },
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', required: true },
     plannedQty: { type: Number, required: true, min: 0 },
+    sheetLineNo: { type: String, default: '' },
+    scheduledHours: { type: mongoose.Schema.Types.Mixed, default: 8 },
+    sheetShift: { type: String, default: '' },
     hourlyInputs: {
       type: [Number],
       validate: {
@@ -71,6 +74,8 @@ export const productionEntrySchema = new mongoose.Schema(
     downtimeReasonId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', default: null },
     downtimeOtherText: { type: String, default: '' },
     remarks: { type: String, default: '' },
+    importSource: { type: String, default: '' },
+    importRow: { type: Number, default: null },
     status: { type: String, enum: VALID_ENTRY_STATUSES, default: 'draft' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

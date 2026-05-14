@@ -27,12 +27,12 @@ const toMonitoringExportRow = (entry, index) => {
 
   return {
     sno: index + 1,
-    lineNo: entry.lineId?.code || entry.lineId?.name?.replace(/\D+/g, '') || getMasterLabel(entry.lineId, ''),
+    lineNo: entry.sheetLineNo || entry.lineId?.code || entry.lineId?.name?.replace(/\D+/g, '') || getMasterLabel(entry.lineId, ''),
     machine: getMasterLabel(entry.machineId),
     operatorName: getMasterLabel(entry.operatorId),
     processName: getMasterLabel(entry.processId),
-    shift: getShiftCode(entry.shiftId),
-    hours: entry.scheduledHours || 8,
+    shift: entry.sheetShift ?? getShiftCode(entry.shiftId),
+    hours: entry.scheduledHours ?? 8,
     targetQty: entry.plannedQty ?? 0,
     actualQtyDate: formatDisplayDate(entry.date),
     actualQty: hourlyInputs,
