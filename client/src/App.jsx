@@ -1494,38 +1494,6 @@ function App() {
 
         {activeTab === 'master' && canUseAdmin ? (
           <section className="grid gap-4">
-            <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
-              {masterKinds.map((kind) => (
-                <button
-                  className={`card cursor-pointer text-center transition-all ${
-                    masterForm.kind === kind
-                      ? 'ring-2 ring-blue-500'
-                      : 'hover:shadow-md'
-                  }`}
-                  key={kind}
-                  onClick={() => setMasterForm((prev) => ({ ...prev, kind, name: '', code: '', lineId: '', machineId: '' })) && setMasterSearch('')}
-                  type="button"
-                >
-                  <div className={`mb-2 inline-block rounded-full p-2 text-white text-lg ${
-                    masterTypeConfig[kind]?.color === 'blue' ? 'bg-blue-500' :
-                    masterTypeConfig[kind]?.color === 'green' ? 'bg-green-500' :
-                    masterTypeConfig[kind]?.color === 'purple' ? 'bg-purple-500' :
-                    masterTypeConfig[kind]?.color === 'orange' ? 'bg-orange-500' :
-                    masterTypeConfig[kind]?.color === 'pink' ? 'bg-pink-500' :
-                    masterTypeConfig[kind]?.color === 'cyan' ? 'bg-cyan-500' :
-                    masterTypeConfig[kind]?.color === 'indigo' ? 'bg-indigo-500' :
-                    masterTypeConfig[kind]?.color === 'red' ? 'bg-red-500' :
-                    'bg-amber-500'
-                  }`}>
-                    {masterTypeConfig[kind]?.icon || '◆'}
-                  </div>
-                  <h3 className="text-xs font-semibold">{masterTypeConfig[kind]?.label}</h3>
-                  <p className="mt-2 text-lg font-bold">{(masters[kind] || []).length}</p>
-                  <p className="text-xs text-slate-500">items</p>
-                </button>
-              ))}
-            </div>
-
             <div className="card">
               <div className="mb-4 flex items-center justify-between">
                 <div>
