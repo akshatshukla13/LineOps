@@ -32,7 +32,27 @@ export const masterItemSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-masterItemSchema.index({ kind: 1, name: 1 }, { unique: true });
+masterItemSchema.index(
+  { kind: 1, name: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { kind: { $in: ['shift', 'line', 'operator', 'defectType'] } },
+  },
+);
+masterItemSchema.index(
+  { kind: 1, lineId: 1, name: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { kind: 'machine', lineId: { $type: 'objectId' } },
+  },
+);
+masterItemSchema.index(
+  { kind: 1, machineId: 1, name: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { kind: 'process', machineId: { $type: 'objectId' } },
+  },
+);
 
 export const editLogSchema = new mongoose.Schema(
   {
@@ -50,12 +70,12 @@ export const productionEntrySchema = new mongoose.Schema(
   {
     date: { type: String, required: true },
     shiftId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', required: true },
-    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', required: true },
+    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', default: null },
     lineId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', required: true },
     machineId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', required: true },
     processId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', required: true },
     operatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', required: true },
-    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', required: true },
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', default: null },
     plannedQty: { type: Number, required: true, min: 0 },
     sheetLineNo: { type: String, default: '' },
     scheduledHours: { type: mongoose.Schema.Types.Mixed, default: 8 },

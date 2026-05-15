@@ -50,13 +50,8 @@ router.get('/', authMiddleware, async (req, res) => {
     query.createdBy = req.user._id;
   }
 
-  if (req.user.role === 'supervisor') {
-    if (req.user.assignedDepartment) {
-      query.departmentId = req.user.assignedDepartment;
-    }
-    if (req.user.assignedLines?.length) {
-      query.lineId = { $in: req.user.assignedLines };
-    }
+  if (req.user.role === 'supervisor' && req.user.assignedLines?.length) {
+    query.lineId = { $in: req.user.assignedLines };
   }
 
   const entries = await ProductionEntry.find(query)
@@ -71,12 +66,10 @@ router.post('/', authMiddleware, requireRole('admin', 'supervisor', 'operator'),
   const payload = req.body || {};
   const requiredIds = [
     'shiftId',
-    'departmentId',
     'lineId',
     'machineId',
     'processId',
     'operatorId',
-    'productId',
   ];
 
   for (const key of requiredIds) {
@@ -99,19 +92,15 @@ router.post('/', authMiddleware, requireRole('admin', 'supervisor', 'operator'),
     }
   }
 
-  if (payload.downtimeReasonId && !asObjectIdOrNull(payload.downtimeReasonId)) {
-    return res.status(400).json({ error: 'Invalid downtimeReasonId.' });
-  }
-
   const entry = new ProductionEntry({
     date: payload.date,
     shiftId: payload.shiftId,
-    departmentId: payload.departmentId,
+    departmentId: null,
     lineId: payload.lineId,
     machineId: payload.machineId,
     processId: payload.processId,
     operatorId: payload.operatorId,
-    productId: payload.productId,
+    productId: null,
     plannedQty: Number(payload.plannedQty),
     sheetLineNo: payload.sheetLineNo || '',
     scheduledHours: payload.scheduledHours ?? 8,
@@ -120,8 +109,8 @@ router.post('/', authMiddleware, requireRole('admin', 'supervisor', 'operator'),
     rejectQty: Number(payload.rejectQty || 0),
     reworkQty: Number(payload.reworkQty || 0),
     downtimeMinutes: Number(payload.downtimeMinutes || 0),
-    downtimeReasonId: payload.downtimeReasonId || null,
-    downtimeOtherText: payload.downtimeOtherText || '',
+    downtimeReasonId: null,
+    downtimeOtherText: String(payload.downtimeOtherText || '').trim(),
     remarks: payload.remarks || '',
     importSource: payload.importSource || '',
     importRow: payload.importRow ?? null,
@@ -179,9 +168,16 @@ router.put('/:id', authMiddleware, requireRole('admin', 'supervisor', 'operator'
   editableFields.forEach((field) => {
     if (req.body[field] !== undefined) {
       const oldValue = entry[field];
-      const newValue = field === 'hourlyInputs'
+      let newValue = field === 'hourlyInputs'
         ? normalizeHourlyInputs(req.body[field])
         : req.body[field];
+
+      if (field === 'departmentId' || field === 'productId' || field === 'downtimeReasonId') {
+        newValue = null;
+      }
+      if (field === 'downtimeOtherText') {
+        newValue = String(newValue || '').trim();
+      }
 
       const changed = JSON.stringify(oldValue) !== JSON.stringify(newValue);
       if (changed) {
@@ -288,12 +284,12 @@ router.post('/clone-previous', authMiddleware, requireRole('admin', 'supervisor'
   const clone = new ProductionEntry({
     date,
     shiftId: source.shiftId,
-    departmentId: source.departmentId,
+    departmentId: null,
     lineId: source.lineId,
     machineId: source.machineId,
     processId: source.processId,
     operatorId: source.operatorId,
-    productId: source.productId,
+    productId: null,
     plannedQty: source.plannedQty,
     sheetLineNo: source.sheetLineNo || '',
     scheduledHours: source.scheduledHours ?? 8,
@@ -302,8 +298,8 @@ router.post('/clone-previous', authMiddleware, requireRole('admin', 'supervisor'
     rejectQty: 0,
     reworkQty: 0,
     downtimeMinutes: 0,
-    downtimeReasonId: source.downtimeReasonId,
-    downtimeOtherText: source.downtimeOtherText,
+    downtimeReasonId: null,
+    downtimeOtherText: source.downtimeOtherText || '',
     remarks: source.remarks,
     status: 'draft',
     createdBy: req.user._id,

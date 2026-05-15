@@ -16,8 +16,7 @@ router.get('/:kind', authMiddleware, async (req, res) => {
   }
 
   const safeKind = MASTER_KINDS.find((item) => item === kind);
-  const query = { kind: safeKind };
-  if (active !== undefined) query.active = active === 'true';
+  const query = { kind: safeKind, active: active === 'false' ? false : true };
 
   if (lineId) {
     const sanitizedLineId = asObjectIdOrNull(lineId);
