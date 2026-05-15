@@ -207,17 +207,17 @@ const entrySchema = z.object({
 })
 
 const emptyEntry = () => ({
-  date: new Date().toISOString().slice(0, 10),
+  date: '',
   shiftId: '',
   lineId: '',
   machineId: '',
   processId: '',
   operatorId: '',
-  plannedQty: 0,
-  hourlyInputs: Array(12).fill(0),
-  rejectQty: 0,
-  reworkQty: 0,
-  downtimeMinutes: 0,
+  plannedQty: '',
+  hourlyInputs: Array(12).fill(''),
+  rejectQty: '',
+  reworkQty: '',
+  downtimeMinutes: '',
   downtimeOtherText: '',
   remarks: '',
   status: 'draft',
@@ -1326,26 +1326,28 @@ function App() {
                     <option value="range">Custom range</option>
                   </select>
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">Start Date</label>
-                  <input
-                    className="input"
-                    disabled={reportFilters.dateMode === 'all'}
-                    onChange={(e) => changeReportFilter('from', e.target.value)}
-                    type="date"
-                    value={reportFilters.from}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">End Date</label>
-                  <input
-                    className="input"
-                    disabled={reportFilters.dateMode === 'all'}
-                    onChange={(e) => changeReportFilter('to', e.target.value)}
-                    type="date"
-                    value={reportFilters.to}
-                  />
-                </div>
+                {reportFilters.dateMode === 'range' ? (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold">Start Date</label>
+                      <input
+                        className="input"
+                        onChange={(e) => changeReportFilter('from', e.target.value)}
+                        type="date"
+                        value={reportFilters.from}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold">End Date</label>
+                      <input
+                        className="input"
+                        onChange={(e) => changeReportFilter('to', e.target.value)}
+                        type="date"
+                        value={reportFilters.to}
+                      />
+                    </div>
+                  </>
+                ) : null}
                 <SelectField
                   emptyLabel="All lines"
                   includeUnspecified={false}
