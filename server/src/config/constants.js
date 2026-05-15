@@ -8,14 +8,11 @@ export const ROLE_HIERARCHY = {
 // Master data kinds
 export const MASTER_KINDS = [
   'shift',
-  'department',
   'line',
   'machine',
   'process',
   'operator',
-  'product',
   'defectType',
-  'downtimeReason',
 ];
 
 export const MASTER_KIND_SET = new Set(MASTER_KINDS);

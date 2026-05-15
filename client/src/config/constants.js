@@ -9,14 +9,11 @@ if (import.meta.env.PROD && !import.meta.env.VITE_API_BASE_URL) {
 
 export const MASTER_KINDS = [
   'shift',
-  'department',
   'line',
   'machine',
   'process',
   'operator',
-  'product',
   'defectType',
-  'downtimeReason',
 ];
 
 export const REPORT_TYPES = [

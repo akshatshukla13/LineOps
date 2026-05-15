@@ -26,14 +26,11 @@ if (import.meta.env.PROD && !import.meta.env.VITE_API_BASE_URL) {
 
 const masterKinds = [
   'shift',
-  'department',
   'line',
   'machine',
   'process',
   'operator',
-  'product',
   'defectType',
-  'downtimeReason',
 ]
 
 const masterTypeConfig = {
@@ -48,25 +45,14 @@ const masterTypeConfig = {
     color: 'blue',
     icon: '🕐',
   },
-  department: {
-    label: 'Department',
-    fields: ['name', 'code'],
-    displayFields: { name: 'Department Name', code: 'Department Code' },
-    tableColumns: ['name', 'code', 'active'],
-    columnLabels: { name: 'Name', code: 'Code', active: 'Status' },
-    parent: null,
-    description: 'Departments within factory',
-    color: 'green',
-    icon: '🏢',
-  },
   line: {
     label: 'Production Line',
-    fields: ['name', 'code', 'departmentId'],
-    displayFields: { name: 'Line Name', code: 'Line Code', departmentId: 'Department' },
-    tableColumns: ['name', 'code', 'departmentId', 'active'],
-    columnLabels: { name: 'Line', code: 'Code', departmentId: 'Department', active: 'Status' },
-    parent: 'department',
-    description: 'Production lines under departments',
+    fields: ['name', 'code'],
+    displayFields: { name: 'Line Name', code: 'Line Code' },
+    tableColumns: ['name', 'code', 'active'],
+    columnLabels: { name: 'Line', code: 'Code', active: 'Status' },
+    parent: null,
+    description: 'Production lines (Line 1–5 and Line F)',
     color: 'purple',
     icon: '🏭',
   },
@@ -94,25 +80,14 @@ const masterTypeConfig = {
   },
   operator: {
     label: 'Operator',
-    fields: ['name', 'code', 'departmentId'],
-    displayFields: { name: 'Operator Name', code: 'Employee ID', departmentId: 'Department' },
-    tableColumns: ['name', 'code', 'departmentId', 'active'],
-    columnLabels: { name: 'Name', code: 'Employee ID', departmentId: 'Department', active: 'Status' },
-    parent: 'department',
-    description: 'Factory operators by department',
+    fields: ['name', 'code'],
+    displayFields: { name: 'Operator Name', code: 'Employee ID' },
+    tableColumns: ['name', 'code', 'active'],
+    columnLabels: { name: 'Name', code: 'Employee ID', active: 'Status' },
+    parent: null,
+    description: 'Factory operators',
     color: 'cyan',
     icon: '👤',
-  },
-  product: {
-    label: 'Product',
-    fields: ['name', 'code'],
-    displayFields: { name: 'Product Name', code: 'Product Code' },
-    tableColumns: ['name', 'code', 'active'],
-    columnLabels: { name: 'Product', code: 'Code', active: 'Status' },
-    parent: null,
-    description: 'Products manufactured',
-    color: 'indigo',
-    icon: '📦',
   },
   defectType: {
     label: 'Defect Type',
@@ -124,17 +99,6 @@ const masterTypeConfig = {
     description: 'Types of product defects (Critical, Major, Minor)',
     color: 'red',
     icon: '❌',
-  },
-  downtimeReason: {
-    label: 'Downtime Reason',
-    fields: ['name', 'code'],
-    displayFields: { name: 'Reason Name', code: 'Reason Code' },
-    tableColumns: ['name', 'code', 'active'],
-    columnLabels: { name: 'Reason', code: 'Code', active: 'Status' },
-    parent: null,
-    description: 'Reasons for production downtime (Power, Maintenance, etc.)',
-    color: 'amber',
-    icon: '⏸️',
   },
 }
 
@@ -157,7 +121,7 @@ const monitoringColumns = [
   { key: 'process', label: 'Process Name', width: 16 },
   { key: 'shift', label: 'Shift', width: 6, vertical: true },
   { key: 'hours', label: 'Hours', width: 6, vertical: true },
-  { key: 'target', label: 'Target Qty', width: 10, vertical: true },
+  { key: 'target', label: 'Target Quantity', width: 10, vertical: true },
   ...Array.from({ length: monitoringHourCount }, (_, index) => ({
     key: `h${index + 1}`,
     label: String(index + 1),
@@ -204,7 +168,7 @@ const toMonitoringRow = (row, index) => {
     rejected: row.rejectQty || '',
     rework: row.reworkQty || '',
     downtime: row.downtimeMinutes || '',
-    reason: row.downtimeReasonId?.name || row.downtimeOtherText || '',
+    reason: row.downtimeOtherText || '',
     efficiency: `${Math.round(Number(row.efficiencyPct || 0))}%`,
     remarks: row.remarks || '',
   }
@@ -227,6 +191,12 @@ const getLoadingMessage = (path, method = 'GET') => {
 
 const UNSPECIFIED_TOKEN = '__UNSPECIFIED__'
 
+const resolveMasterId = (value) => {
+  if (value == null || value === '') return ''
+  if (typeof value === 'object' && value._id) return String(value._id)
+  return String(value)
+}
+
 const loginSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
@@ -238,20 +208,17 @@ const userSchema = z.object({
   username: z.string().min(3, 'Username is required'),
   password: z.string().min(6, 'Password must be at least 6 chars'),
   role: z.enum(['admin', 'supervisor', 'operator']),
-  assignedDepartment: z.string().optional(),
   status: z.enum(['active', 'inactive']),
 })
 
 const entrySchema = z.object({
-  date: z.string().min(1),
-  shiftId: z.string().min(1),
-  departmentId: z.string().min(1),
-  lineId: z.string().min(1),
-  machineId: z.string().min(1),
-  processId: z.string().min(1),
-  operatorId: z.string().min(1),
-  productId: z.string().min(1),
-  plannedQty: z.coerce.number().min(0),
+  date: z.string().min(1, 'Date is required'),
+  shiftId: z.string().min(1, 'Shift is required'),
+  lineId: z.string().min(1, 'Line is required'),
+  machineId: z.string().min(1, 'Machine is required'),
+  processId: z.string().min(1, 'Process is required'),
+  operatorId: z.string().min(1, 'Operator is required'),
+  plannedQty: z.coerce.number().min(0, 'Target quantity must be 0 or more'),
   rejectQty: z.coerce.number().min(0),
   reworkQty: z.coerce.number().min(0),
   downtimeMinutes: z.coerce.number().min(0),
@@ -262,21 +229,36 @@ const entrySchema = z.object({
 const emptyEntry = () => ({
   date: new Date().toISOString().slice(0, 10),
   shiftId: '',
-  departmentId: '',
   lineId: '',
   machineId: '',
   processId: '',
   operatorId: '',
-  productId: '',
   plannedQty: 0,
   hourlyInputs: Array(12).fill(0),
   rejectQty: 0,
   reworkQty: 0,
   downtimeMinutes: 0,
-  downtimeReasonId: '',
   downtimeOtherText: '',
   remarks: '',
   status: 'draft',
+})
+
+const entryToDraft = (entry) => ({
+  ...emptyEntry(),
+  date: entry.date || emptyEntry().date,
+  shiftId: resolveMasterId(entry.shiftId),
+  lineId: resolveMasterId(entry.lineId),
+  machineId: resolveMasterId(entry.machineId),
+  processId: resolveMasterId(entry.processId),
+  operatorId: resolveMasterId(entry.operatorId),
+  plannedQty: entry.plannedQty ?? 0,
+  hourlyInputs: [...(entry.hourlyInputs || []), ...Array(12).fill(0)].slice(0, 12).map((value) => Number(value || 0)),
+  rejectQty: entry.rejectQty ?? 0,
+  reworkQty: entry.reworkQty ?? 0,
+  downtimeMinutes: entry.downtimeMinutes ?? 0,
+  downtimeOtherText: entry.downtimeOtherText || '',
+  remarks: entry.remarks || '',
+  status: entry.status || 'submitted',
 })
 
 function App() {
@@ -298,7 +280,7 @@ function App() {
   const [entries, setEntries] = useState([])
   const [auditLogs, setAuditLogs] = useState([])
   const [entryDraft, setEntryDraft] = useState(emptyEntry)
-  const [entryHistory, setEntryHistory] = useState([])
+  const [editingEntryId, setEditingEntryId] = useState(null)
   const [reportFilters, setReportFilters] = useState({
     type: 'daily',
     date: new Date().toISOString().slice(0, 10),
@@ -307,24 +289,20 @@ function App() {
     shiftId: '',
     operatorId: '',
     machineId: '',
-    departmentId: '',
     lineId: '',
   })
   const [reportData, setReportData] = useState([])
   const [reportSpreadsheetRows, setReportSpreadsheetRows] = useState([])
   const [dbSheetData, setDbSheetData] = useState([])
   const [missedEntries, setMissedEntries] = useState([])
-  const [isSavingDraft, setIsSavingDraft] = useState(false)
-  const [editingRow, setEditingRow] = useState(null)
-  const [editReason, setEditReason] = useState('')
+  const [isSavingEntry, setIsSavingEntry] = useState(false)
   const [requestCount, setRequestCount] = useState(0)
   const [loadingMessage, setLoadingMessage] = useState('')
   const [masterForm, setMasterForm] = useState({
-    kind: 'department',
+    kind: 'line',
     name: '',
     code: '',
     active: true,
-    departmentId: '',
     lineId: '',
     machineId: '',
   })
@@ -344,12 +322,10 @@ function App() {
       username: '',
       password: '',
       role: 'operator',
-      assignedDepartment: '',
       status: 'active',
     },
   })
 
-  const autoSaveRef = useRef(null)
 
   const isLoading = requestCount > 0
 
@@ -409,7 +385,13 @@ function App() {
     }
   }, [beginRequest, endRequest, token])
 
-  const optionsByKind = (kind) => masters[kind] || []
+  const optionsByKind = (kind) => (masters[kind] || []).filter((item) => item.active !== false)
+
+  const masterNameById = (kind, id) => {
+    if (!id) return '-'
+    const match = optionsByKind(kind).find((item) => String(item._id) === String(id))
+    return match?.name || '-'
+  }
 
   const getParentName = (parentKind, parentId) => {
     if (!parentId || !parentKind) return '-'
@@ -439,12 +421,6 @@ function App() {
     if (!entryDraft.machineId) return processes
     return processes.filter((item) => item.machineId === entryDraft.machineId)
   }, [entryDraft.machineId, masters.process])
-
-  const filteredOperators = useMemo(() => {
-    const operators = masters.operator || []
-    if (!entryDraft.departmentId) return operators
-    return operators.filter((item) => item.departmentId === entryDraft.departmentId)
-  }, [entryDraft.departmentId, masters.operator])
 
   const calculated = useMemo(() => {
     const totalProduction = entryDraft.hourlyInputs.reduce((sum, value) => sum + Number(value || 0), 0)
@@ -580,13 +556,21 @@ function App() {
   })
 
   const setDraftField = (key, value) => {
-    setEntryHistory((prev) => [...prev.slice(-20), entryDraft])
-    setEntryDraft((prev) => ({ ...prev, [key]: value }))
+    setEntryDraft((prev) => {
+      const next = { ...prev, [key]: value }
+      if (key === 'lineId') {
+        next.machineId = ''
+        next.processId = ''
+      }
+      if (key === 'machineId') {
+        next.processId = ''
+      }
+      return next
+    })
   }
 
   const setHourlyValue = (index, value) => {
     const numeric = Number.isNaN(Number(value)) ? 0 : Number(value)
-    setEntryHistory((prev) => [...prev.slice(-20), entryDraft])
     setEntryDraft((prev) => {
       const next = [...prev.hourlyInputs]
       next[index] = numeric
@@ -594,121 +578,68 @@ function App() {
     })
   }
 
-  const saveEntry = async (asDraft = false) => {
+  const loadEntryForEdit = (entry) => {
+    if (entry.status === 'locked') {
+      setErrorText('Locked entries cannot be edited.')
+      return
+    }
+    setErrorText('')
+    setEditingEntryId(entry._id)
+    setEntryDraft(entryToDraft(entry))
+    setStatusText('Entry loaded for editing. Update fields and click Save.')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const saveEntry = async () => {
     setErrorText('')
     try {
-      const parsed = entrySchema.parse(entryDraft)
-      setIsSavingDraft(true)
-      setStatusText('Saving...')
-      const payload = {
+      const normalized = {
         ...entryDraft,
-        ...parsed,
-        status: asDraft ? 'draft' : 'submitted',
+        shiftId: resolveMasterId(entryDraft.shiftId),
+        lineId: resolveMasterId(entryDraft.lineId),
+        machineId: resolveMasterId(entryDraft.machineId),
+        processId: resolveMasterId(entryDraft.processId),
+        operatorId: resolveMasterId(entryDraft.operatorId),
       }
-      await authFetch('/api/entries', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      })
-      setStatusText('Saved')
+      const parsed = entrySchema.parse(normalized)
+      setIsSavingEntry(true)
+      setStatusText(editingEntryId ? 'Updating...' : 'Saving...')
+      const payload = {
+        ...normalized,
+        ...parsed,
+        departmentId: null,
+        productId: null,
+        downtimeReasonId: null,
+        status: 'submitted',
+      }
+
+      if (editingEntryId) {
+        await authFetch(`/api/entries/${editingEntryId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        })
+        setStatusText('Entry updated.')
+      } else {
+        await authFetch('/api/entries', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        setStatusText('Entry saved.')
+      }
+
+      setEditingEntryId(null)
       setEntryDraft(emptyEntry())
-      setEntryHistory([])
       await Promise.all([loadEntries(), loadDbSheet()])
     } catch (error) {
-      setErrorText(error.message)
-      setStatusText('Error')
+      const message =
+        error instanceof z.ZodError
+          ? error.issues[0]?.message
+          : error.message || 'Could not save entry.'
+      setErrorText(message)
+      setStatusText('')
     } finally {
-      setIsSavingDraft(false)
+      setIsSavingEntry(false)
     }
-  }
-
-  const saveDraft = () => saveEntry(true)
-
-  const updateEntryInline = async (id, patch) => {
-    setErrorText('')
-    try {
-      await authFetch(`/api/entries/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ ...patch, editReason }),
-      })
-      setStatusText('Row updated')
-      await Promise.all([loadEntries(), loadDbSheet()])
-    } catch (error) {
-      setErrorText(error.message)
-    }
-  }
-
-  const lockEntry = async (id) => {
-    try {
-      await authFetch(`/api/entries/${id}/lock`, { method: 'POST' })
-      await Promise.all([loadEntries(), loadDbSheet()])
-    } catch (error) {
-      setErrorText(error.message)
-    }
-  }
-
-  const unlockEntry = async (id) => {
-    try {
-      await authFetch(`/api/entries/${id}/unlock`, { method: 'POST' })
-      await Promise.all([loadEntries(), loadDbSheet()])
-    } catch (error) {
-      setErrorText(error.message)
-    }
-  }
-
-  const clonePreviousDay = async () => {
-    try {
-      await authFetch('/api/entries/clone-previous', {
-        method: 'POST',
-        body: JSON.stringify({
-          date: entryDraft.date,
-          lineId: entryDraft.lineId || undefined,
-          machineId: entryDraft.machineId || undefined,
-          shiftId: entryDraft.shiftId || undefined,
-        }),
-      })
-      await Promise.all([loadEntries(), loadDbSheet()])
-      setStatusText('Previous day setup cloned.')
-    } catch (error) {
-      setErrorText(error.message)
-    }
-  }
-
-  const undoLastChange = () => {
-    const previous = entryHistory.at(-1)
-    if (!previous) return
-    setEntryDraft(previous)
-    setEntryHistory((prev) => prev.slice(0, -1))
-  }
-
-  const clearRow = () => {
-    setEntryDraft(emptyEntry())
-    setEntryHistory([])
-    setStatusText('Row cleared.')
-  }
-
-  const copyPreviousRow = () => {
-    const latest = entries[0]
-    if (!latest) return
-    setEntryDraft({
-      ...emptyEntry(),
-      date: new Date().toISOString().slice(0, 10),
-      shiftId: latest.shiftId || '',
-      departmentId: latest.departmentId || '',
-      lineId: latest.lineId || '',
-      machineId: latest.machineId || '',
-      processId: latest.processId || '',
-      operatorId: latest.operatorId || '',
-      productId: latest.productId || '',
-      plannedQty: latest.plannedQty || 0,
-      downtimeReasonId: latest.downtimeReasonId || '',
-      remarks: latest.remarks || '',
-    })
-    setStatusText('Previous row copied.')
-  }
-
-  const duplicateShiftEntry = () => {
-    setEntryDraft((prev) => ({ ...prev, hourlyInputs: Array(12).fill(0), status: 'draft' }))
-    setStatusText('Shift setup duplicated.')
   }
 
   const runReport = async () => {
@@ -799,7 +730,7 @@ function App() {
       worksheet.columns = [
         { header: 'Category', key: 'key', width: 20 },
         { header: 'Records', key: 'records', width: 12 },
-        { header: 'Planned Qty', key: 'plannedQty', width: 16 },
+        { header: 'Target Quantity', key: 'plannedQty', width: 16 },
         { header: 'Total Production', key: 'totalProduction', width: 18 },
         { header: 'Net Production', key: 'netProduction', width: 16 },
         { header: 'Reject Qty', key: 'rejectQty', width: 12 },
@@ -883,7 +814,7 @@ function App() {
         )
       } else {
         page.drawText(
-          `${row.label || row.key} | Records: ${row.records} | Planned: ${row.plannedQty} | Net: ${row.netProduction} | Efficiency: ${row.efficiencyPct}%`,
+          `${row.label || row.key} | Records: ${row.records} | Target: ${row.plannedQty} | Net: ${row.netProduction} | Efficiency: ${row.efficiencyPct}%`,
           {
             x: 30,
             y,
@@ -908,10 +839,7 @@ function App() {
 
   const addUser = addUserForm.handleSubmit(async (values) => {
     try {
-      const payload = {
-        ...values,
-        assignedDepartment: values.assignedDepartment || null,
-      }
+      const payload = { ...values }
       await authFetch('/api/users', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -922,7 +850,6 @@ function App() {
         username: '',
         password: '',
         role: 'operator',
-        assignedDepartment: '',
         status: 'active',
       })
       await loadUsers()
@@ -972,7 +899,6 @@ function App() {
           name: masterForm.name.trim(),
           code: masterForm.code.trim(),
           active: masterForm.active,
-          departmentId: masterForm.departmentId || null,
           lineId: masterForm.lineId || null,
           machineId: masterForm.machineId || null,
         }),
@@ -1046,32 +972,6 @@ function App() {
   const changeReportFilter = (key, value) => {
     setReportFilters((prev) => ({ ...prev, [key]: value }))
   }
-
-  useEffect(() => {
-    if (!token || !user) return undefined
-
-    if (autoSaveRef.current) clearInterval(autoSaveRef.current)
-    autoSaveRef.current = setInterval(() => {
-      const hasMinimumData =
-        entryDraft.date &&
-        entryDraft.shiftId &&
-        entryDraft.departmentId &&
-        entryDraft.lineId &&
-        entryDraft.machineId &&
-        entryDraft.processId &&
-        entryDraft.operatorId &&
-        entryDraft.productId
-
-      if (hasMinimumData && !isSavingDraft) {
-        saveDraft()
-      }
-    }, 30000)
-
-    return () => {
-      if (autoSaveRef.current) clearInterval(autoSaveRef.current)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, user, entryDraft, isSavingDraft])
 
   const canUseAdmin = user?.role === 'admin'
   const canUseSupervisorViews = ['admin', 'supervisor'].includes(user?.role || '')
@@ -1241,21 +1141,26 @@ function App() {
         {activeTab === 'entry' ? (
           <section className="grid min-w-0 gap-4">
             <div className="card">
-              <h2 className="mb-3 text-base font-semibold">Daily Production Entry</h2>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-base font-semibold">Daily Production Entry</h2>
+                {editingEntryId ? (
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                    Editing saved entry — click Save to update
+                  </span>
+                ) : null}
+              </div>
               <div className="grid gap-3 md:grid-cols-4">
                 <div>
                   <label className="mb-1 block text-xs font-semibold">Date</label>
                   <input className="input" onChange={(e) => setDraftField('date', e.target.value)} type="date" value={entryDraft.date} />
                 </div>
                 <SelectField label="Shift" options={optionsByKind('shift')} onChange={(v) => setDraftField('shiftId', v)} value={entryDraft.shiftId} />
-                <SelectField label="Department" options={optionsByKind('department')} onChange={(v) => setDraftField('departmentId', v)} value={entryDraft.departmentId} />
                 <SelectField label="Line" options={optionsByKind('line')} onChange={(v) => setDraftField('lineId', v)} value={entryDraft.lineId} />
                 <SelectField label="Machine" options={filteredMachines} onChange={(v) => setDraftField('machineId', v)} value={entryDraft.machineId} />
                 <SelectField label="Process" options={filteredProcesses} onChange={(v) => setDraftField('processId', v)} value={entryDraft.processId} />
-                <SelectField label="Operator" options={filteredOperators} onChange={(v) => setDraftField('operatorId', v)} value={entryDraft.operatorId} />
-                <SelectField label="Product" options={optionsByKind('product')} onChange={(v) => setDraftField('productId', v)} value={entryDraft.productId} />
+                <SelectField label="Operator" options={optionsByKind('operator')} onChange={(v) => setDraftField('operatorId', v)} value={entryDraft.operatorId} />
                 <div>
-                  <label className="mb-1 block text-xs font-semibold">Planned Qty</label>
+                  <label className="mb-1 block text-xs font-semibold">Target Quantity</label>
                   <input
                     className="input"
                     inputMode="numeric"
@@ -1298,24 +1203,17 @@ function App() {
                     value={entryDraft.downtimeMinutes}
                   />
                 </div>
-                <SelectField
-                  label="Downtime Reason"
-                  options={optionsByKind('downtimeReason')}
-                  onChange={(v) => setDraftField('downtimeReasonId', v)}
-                  value={entryDraft.downtimeReasonId}
-                />
-              </div>
-
-              {isOtherDowntimeSelected(entryDraft, optionsByKind('downtimeReason')) ? (
-                <div className="mt-3">
-                  <label className="mb-1 block text-xs font-semibold">Downtime Other (required for Other)</label>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold">Downtime Reason</label>
                   <input
                     className="input"
                     onChange={(e) => setDraftField('downtimeOtherText', e.target.value)}
+                    placeholder="Enter downtime reason"
+                    type="text"
                     value={entryDraft.downtimeOtherText}
                   />
                 </div>
-              ) : null}
+              </div>
 
               <div className="mt-3">
                 <label className="mb-1 block text-xs font-semibold">Remarks</label>
@@ -1361,143 +1259,86 @@ function App() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <button className="btn-primary" onClick={() => saveEntry(false)} type="button">Save Changes</button>
-                <button className="btn-muted" onClick={saveDraft} type="button">Save Draft</button>
-                <button className="btn-muted" onClick={copyPreviousRow} type="button">Copy Previous Row</button>
-                <button className="btn-muted" onClick={duplicateShiftEntry} type="button">Duplicate Shift Entry</button>
-                <button className="btn-muted" onClick={undoLastChange} type="button">Undo Last Change</button>
-                <button className="btn-muted" onClick={clearRow} type="button">Clear Row</button>
-                <button className="btn-muted" onClick={clonePreviousDay} type="button">Clone Previous Day Setup</button>
-                <span className="self-center text-xs text-slate-500">Auto-save every 30 seconds</span>
+                <button className="btn-primary" disabled={isSavingEntry} onClick={() => saveEntry()} type="button">
+                  {isSavingEntry ? 'Saving...' : 'Save'}
+                </button>
               </div>
             </div>
 
             <div className="card">
-              <h2 className="mb-2 text-base font-semibold">Submitted Entries (Inline Editable Grid)</h2>
-              <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center">
-                <input
-                  className="input md:max-w-xs"
-                  onChange={(e) => setEditReason(e.target.value)}
-                  placeholder="Edit reason (optional for critical fields)"
-                  value={editReason}
-                />
-              </div>
+              <h2 className="mb-2 text-base font-semibold">Saved Entries</h2>
+              <p className="mb-3 text-sm text-slate-500">
+                Click Edit to load an entry into the form above, change values, then Save to update.
+              </p>
               <div className="overflow-x-auto">
-                <table className="text-xs" style={{ minWidth: '1100px' }}>
+                <table className="min-w-full text-xs">
                   <thead className="sticky top-0 bg-slate-200 dark:bg-slate-800">
                     <tr>
                       <HeaderCell text="Date" />
-                      <HeaderCell text="Status" />
-                      <HeaderCell text="Planned" />
-                      <HeaderCell text="H1" />
-                      <HeaderCell text="H2" />
-                      <HeaderCell text="H3" />
-                      <HeaderCell text="H4" />
-                      <HeaderCell text="H5" />
-                      <HeaderCell text="H6" />
-                      <HeaderCell text="H7" />
-                      <HeaderCell text="H8" />
-                      <HeaderCell text="H9" />
-                      <HeaderCell text="H10" />
-                      <HeaderCell text="H11" />
-                      <HeaderCell text="H12" />
-                      <HeaderCell text="Reject" />
-                      <HeaderCell text="Rework" />
-                      <HeaderCell text="Downtime" />
+                      <HeaderCell text="Line" />
+                      <HeaderCell text="Machine" />
+                      <HeaderCell text="Process" />
+                      <HeaderCell text="Operator" />
+                      <HeaderCell text="Shift" />
+                      <HeaderCell text="Target Quantity" />
+                      <HeaderCell text="Total" />
                       <HeaderCell text="Efficiency" />
+                      <HeaderCell text="Status" />
                       <HeaderCell text="Actions" />
                     </tr>
                   </thead>
                   <tbody>
-                    {entries.map((row) => {
-                      const isLocked = row.status === 'locked'
-                      const rowHighlight = isLocked ? 'bg-slate-100 dark:bg-slate-900' : ''
-                      return (
-                        <tr className={rowHighlight} key={row._id}>
-                          <BodyCell>{row.date}</BodyCell>
-                          <BodyCell>
-                            <span className="inline-flex items-center gap-1">
-                              {row.status === 'locked' ? '🔒' : row.status === 'draft' ? '📝' : '✅'} {row.status}
-                            </span>
-                          </BodyCell>
-                          <BodyCell>{row.plannedQty}</BodyCell>
-                          {(row.hourlyInputs || Array(12).fill(0)).map((value, idx) => (
-                            <BodyCell key={`${row._id}-h-${idx}`}>
-                              <input
-                                className={`input w-16 ${row.editedCells?.includes('hourlyInputs') ? 'border-amber-400' : ''}`}
-                                defaultValue={value}
-                                disabled={isLocked}
-                                inputMode="numeric"
-                                onBlur={(e) => {
-                                  const next = [...(row.hourlyInputs || Array(12).fill(0))]
-                                  next[idx] = Number(e.target.value || 0)
-                                  updateEntryInline(row._id, { hourlyInputs: next })
-                                }}
-                                type="number"
-                              />
+                    {entries.length === 0 ? (
+                      <tr>
+                        <BodyCell colSpan={11}>No entries saved yet.</BodyCell>
+                      </tr>
+                    ) : (
+                      entries.map((row) => {
+                        const isLocked = row.status === 'locked'
+                        const isEditing = editingEntryId === row._id
+                        const total = (row.hourlyInputs || []).reduce((sum, value) => sum + Number(value || 0), 0)
+                        return (
+                          <tr
+                            className={`${isLocked ? 'bg-slate-100 dark:bg-slate-900' : ''} ${isEditing ? 'ring-2 ring-amber-400 ring-inset' : ''}`}
+                            key={row._id}
+                          >
+                            <BodyCell>{row.date}</BodyCell>
+                            <BodyCell>{masterNameById('line', resolveMasterId(row.lineId))}</BodyCell>
+                            <BodyCell>{masterNameById('machine', resolveMasterId(row.machineId))}</BodyCell>
+                            <BodyCell>{masterNameById('process', resolveMasterId(row.processId))}</BodyCell>
+                            <BodyCell>{masterNameById('operator', resolveMasterId(row.operatorId))}</BodyCell>
+                            <BodyCell>{masterNameById('shift', resolveMasterId(row.shiftId))}</BodyCell>
+                            <BodyCell>{row.plannedQty}</BodyCell>
+                            <BodyCell>{total}</BodyCell>
+                            <BodyCell>
+                              <span className={row.efficiencyPct >= 90 ? 'text-emerald-600' : row.efficiencyPct >= 70 ? 'text-yellow-500' : 'text-rose-600'}>
+                                {Math.round(Number(row.efficiencyPct || 0))}%
+                              </span>
                             </BodyCell>
-                          ))}
-                          <BodyCell>
-                            <input
-                              className={`input w-16 ${row.editedCells?.includes('rejectQty') ? 'border-amber-400' : ''}`}
-                              defaultValue={row.rejectQty}
-                              disabled={isLocked}
-                              onBlur={(e) => updateEntryInline(row._id, { rejectQty: Number(e.target.value || 0) })}
-                              type="number"
-                            />
-                          </BodyCell>
-                          <BodyCell>
-                            <input
-                              className={`input w-16 ${row.editedCells?.includes('reworkQty') ? 'border-amber-400' : ''}`}
-                              defaultValue={row.reworkQty}
-                              disabled={isLocked}
-                              onBlur={(e) => updateEntryInline(row._id, { reworkQty: Number(e.target.value || 0) })}
-                              type="number"
-                            />
-                          </BodyCell>
-                          <BodyCell>
-                            <input
-                              className={`input w-16 ${row.editedCells?.includes('downtimeMinutes') ? 'border-amber-400' : ''}`}
-                              defaultValue={row.downtimeMinutes}
-                              disabled={isLocked}
-                              onBlur={(e) => updateEntryInline(row._id, { downtimeMinutes: Number(e.target.value || 0) })}
-                              type="number"
-                            />
-                          </BodyCell>
-                          <BodyCell>
-                            <span className={row.efficiencyPct >= 90 ? 'text-emerald-600' : row.efficiencyPct >= 70 ? 'text-yellow-500' : 'text-rose-600'}>
-                              {row.efficiencyPct}%
-                            </span>
-                          </BodyCell>
-                          <BodyCell>
-                            <div className="flex flex-wrap gap-1">
-                              <button className="btn-muted" onClick={() => setEditingRow(row)} type="button">Row Edit</button>
-                              {canUseSupervisorViews && !isLocked ? (
-                                <button className="btn-muted" onClick={() => lockEntry(row._id)} type="button">Lock</button>
-                              ) : null}
-                              {canUseAdmin && isLocked ? (
-                                <button className="btn-muted" onClick={() => unlockEntry(row._id)} type="button">Unlock</button>
-                              ) : null}
-                            </div>
-                          </BodyCell>
-                        </tr>
-                      )
-                    })}
+                            <BodyCell>
+                              <span className="inline-flex items-center gap-1 capitalize">
+                                {row.status === 'locked' ? '🔒' : row.status === 'draft' ? '📝' : '✅'} {row.status}
+                              </span>
+                            </BodyCell>
+                            <BodyCell>
+                              <button
+                                className="btn-muted"
+                                disabled={isLocked}
+                                onClick={() => loadEntryForEdit(row)}
+                                type="button"
+                              >
+                                Edit
+                              </button>
+                            </BodyCell>
+                          </tr>
+                        )
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
 
-            {editingRow ? (
-              <RowEditModal
-                entry={editingRow}
-                onClose={() => setEditingRow(null)}
-                onSave={async (patch) => {
-                  await updateEntryInline(editingRow._id, patch)
-                  setEditingRow(null)
-                }}
-              />
-            ) : null}
           </section>
         ) : null}
 
@@ -1556,7 +1397,6 @@ function App() {
                       <label className="mb-1 block text-xs font-semibold">Date</label>
                       <input className="input" onChange={(e) => changeReportFilter('date', e.target.value)} type="date" value={reportFilters.date} />
                     </div>
-                    <SelectField label="Department" options={optionsByKind('department')} onChange={(v) => changeReportFilter('departmentId', v)} value={reportFilters.departmentId} />
                     <SelectField label="Line" options={optionsByKind('line')} onChange={(v) => changeReportFilter('lineId', v)} value={reportFilters.lineId} />
                     <SelectField label="Shift" options={optionsByKind('shift')} onChange={(v) => changeReportFilter('shiftId', v)} value={reportFilters.shiftId} />
                   </>
@@ -1666,7 +1506,7 @@ function App() {
                         <YAxis />
                         <Tooltip />
                         <Legend />
-                        <Bar dataKey="plannedQty" fill="#94a3b8" name="Planned" />
+                        <Bar dataKey="plannedQty" fill="#94a3b8" name="Target Quantity" />
                         <Bar dataKey="netProduction" fill="#2563eb" name="Net Production" />
                         <Bar dataKey="downtimeMinutes" fill="#f97316" name="Downtime (min)" />
                       </BarChart>
@@ -1681,7 +1521,7 @@ function App() {
                       <tr className="bg-slate-200 dark:bg-slate-800">
                         <HeaderCell text="Category" />
                         <HeaderCell text="Records" />
-                        <HeaderCell text="Planned" />
+                        <HeaderCell text="Target Quantity" />
                         <HeaderCell text="Total" />
                         <HeaderCell text="Net" />
                         <HeaderCell text="Reject" />
@@ -1735,15 +1575,6 @@ function App() {
                     <option value="admin">Admin</option>
                     <option value="supervisor">Supervisor</option>
                     <option value="operator">Operator</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">Assigned Department</label>
-                  <select className="select" {...addUserForm.register('assignedDepartment')}>
-                    <option value="">None</option>
-                    {optionsByKind('department').map((item) => (
-                      <option key={item._id} value={item._id}>{item.name}</option>
-                    ))}
                   </select>
                 </div>
                 <div>
@@ -1810,7 +1641,7 @@ function App() {
                       : 'hover:shadow-md'
                   }`}
                   key={kind}
-                  onClick={() => setMasterForm((prev) => ({ ...prev, kind, name: '', code: '', departmentId: '', lineId: '', machineId: '' })) && setMasterSearch('')}
+                  onClick={() => setMasterForm((prev) => ({ ...prev, kind, name: '', code: '', lineId: '', machineId: '' })) && setMasterSearch('')}
                   type="button"
                 >
                   <div className={`mb-2 inline-block rounded-full p-2 text-white text-lg ${
@@ -1841,7 +1672,7 @@ function App() {
                 </div>
                 <select
                   className="select w-40"
-                  onChange={(e) => setMasterForm((prev) => ({ ...prev, kind: e.target.value, name: '', code: '', departmentId: '', lineId: '', machineId: '' }))}
+                  onChange={(e) => setMasterForm((prev) => ({ ...prev, kind: e.target.value, name: '', code: '', lineId: '', machineId: '' }))}
                   value={masterForm.kind}
                 >
                   {masterKinds.map((kind) => (
@@ -2134,83 +1965,6 @@ function TextInput({ label, register, type = 'text' }) {
       <input className="input" type={type} {...register} />
     </div>
   )
-}
-
-function RowEditModal({ entry, onClose, onSave }) {
-  const [form, setForm] = useState({
-    plannedQty: entry.plannedQty || 0,
-    rejectQty: entry.rejectQty || 0,
-    reworkQty: entry.reworkQty || 0,
-    downtimeMinutes: entry.downtimeMinutes || 0,
-    remarks: entry.remarks || '',
-  })
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/35 p-2 md:p-4">
-      <div className="card w-full max-w-md">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold">Row Edit Mode</h3>
-          <button className="btn-muted" onClick={onClose} type="button">Close</button>
-        </div>
-        <div className="grid gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold">Planned Qty</label>
-            <input
-              className="input"
-              onChange={(e) => setForm((prev) => ({ ...prev, plannedQty: Number(e.target.value || 0) }))}
-              type="number"
-              value={form.plannedQty}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold">Reject Qty</label>
-            <input
-              className="input"
-              onChange={(e) => setForm((prev) => ({ ...prev, rejectQty: Number(e.target.value || 0) }))}
-              type="number"
-              value={form.rejectQty}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold">Rework Qty</label>
-            <input
-              className="input"
-              onChange={(e) => setForm((prev) => ({ ...prev, reworkQty: Number(e.target.value || 0) }))}
-              type="number"
-              value={form.reworkQty}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold">Downtime Minutes</label>
-            <input
-              className="input"
-              onChange={(e) => setForm((prev) => ({ ...prev, downtimeMinutes: Number(e.target.value || 0) }))}
-              type="number"
-              value={form.downtimeMinutes}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold">Remarks</label>
-            <textarea
-              className="textarea"
-              onChange={(e) => setForm((prev) => ({ ...prev, remarks: e.target.value }))}
-              rows={3}
-              value={form.remarks}
-            />
-          </div>
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button className="btn-muted" onClick={onClose} type="button">Cancel</button>
-          <button className="btn-primary" onClick={() => onSave(form)} type="button">Save Row</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function isOtherDowntimeSelected(entryDraft, reasons) {
-  const selected = reasons.find((item) => item._id === entryDraft.downtimeReasonId)
-  return selected?.name?.toLowerCase() === 'other'
 }
 
 export default App

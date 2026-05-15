@@ -13,12 +13,10 @@ export const canEditEntry = (user, entry) => {
 
   if (user.role === 'supervisor') {
     const inDateWindow = entry.date === today || entry.date === yesterday;
-    const departmentMatch =
-      !user.assignedDepartment || String(user.assignedDepartment) === String(entry.departmentId);
     const lineMatch =
       !user.assignedLines?.length ||
       user.assignedLines.some((lineId) => String(lineId) === String(entry.lineId));
-    return inDateWindow && departmentMatch && lineMatch;
+    return inDateWindow && lineMatch;
   }
 
   return false;

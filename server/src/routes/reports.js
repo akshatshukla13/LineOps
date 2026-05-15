@@ -49,7 +49,7 @@ const toMonitoringExportRow = (entry, index) => {
     rejected: entry.rejectQty || '',
     rework: entry.reworkQty || '',
     downtime: entry.downtimeMinutes || '',
-    reason: entry.downtimeReasonId?.name || entry.downtimeOtherText || '',
+    reason: entry.downtimeOtherText || '',
     efficiency: `${Math.round(Number(entry.efficiencyPct || 0))}%`,
     remarks: entry.remarks || '',
   };
@@ -103,9 +103,8 @@ router.get('/', authMiddleware, async (req, res) => {
     query.createdBy = req.user._id;
   }
 
-  if (req.user.role === 'supervisor') {
-    if (req.user.assignedDepartment) query.departmentId = req.user.assignedDepartment;
-    if (req.user.assignedLines?.length) query.lineId = { $in: req.user.assignedLines };
+  if (req.user.role === 'supervisor' && req.user.assignedLines?.length) {
+    query.lineId = { $in: req.user.assignedLines };
   }
 
   // For monitoring report type, return detailed entries with populated references
