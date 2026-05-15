@@ -25,6 +25,110 @@ const dropLegacyMasterIndexes = async () => {
   await MasterItem.syncIndexes();
 };
 
+const upsertLine = async (lineRow) => {
+  let lineDoc = await MasterItem.findOne({
+    kind: 'line',
+    $or: [{ code: lineRow.code }, { name: lineRow.lineName }],
+  }).sort({ active: -1, updatedAt: -1 });
+
+  if (lineDoc) {
+    lineDoc.name = lineRow.lineName;
+    lineDoc.code = lineRow.code;
+    lineDoc.active = true;
+    lineDoc.departmentId = null;
+    await lineDoc.save();
+  } else {
+    lineDoc = await MasterItem.create({
+      kind: 'line',
+      name: lineRow.lineName,
+      code: lineRow.code,
+      active: true,
+    });
+  }
+
+  await MasterItem.updateMany(
+    {
+      kind: 'line',
+      name: lineRow.lineName,
+      _id: { $ne: lineDoc._id },
+    },
+    { $set: { active: false } },
+  );
+
+  return lineDoc;
+};
+
+const upsertMachine = async (machineRow, mCode, lineId) => {
+  let machineDoc = await MasterItem.findOne({
+    kind: 'machine',
+    $or: [{ code: mCode }, { name: machineRow.name, lineId }],
+  }).sort({ active: -1, updatedAt: -1 });
+
+  if (machineDoc) {
+    machineDoc.name = machineRow.name;
+    machineDoc.code = mCode;
+    machineDoc.lineId = lineId;
+    machineDoc.active = true;
+    machineDoc.departmentId = null;
+    await machineDoc.save();
+  } else {
+    machineDoc = await MasterItem.create({
+      kind: 'machine',
+      name: machineRow.name,
+      code: mCode,
+      lineId,
+      active: true,
+    });
+  }
+
+  await MasterItem.updateMany(
+    {
+      kind: 'machine',
+      lineId,
+      name: machineRow.name,
+      _id: { $ne: machineDoc._id },
+    },
+    { $set: { active: false } },
+  );
+
+  return machineDoc;
+};
+
+const upsertProcess = async (processName, pCode, machineId) => {
+  let processDoc = await MasterItem.findOne({
+    kind: 'process',
+    $or: [{ code: pCode }, { name: processName, machineId }],
+  }).sort({ active: -1, updatedAt: -1 });
+
+  if (processDoc) {
+    processDoc.name = processName;
+    processDoc.code = pCode;
+    processDoc.machineId = machineId;
+    processDoc.active = true;
+    await processDoc.save();
+  } else {
+    processDoc = await MasterItem.create({
+      kind: 'process',
+      name: processName,
+      code: pCode,
+      machineId,
+      active: true,
+    });
+  }
+
+  await MasterItem.updateMany(
+    {
+      kind: 'process',
+      machineId,
+      name: processName,
+      _id: { $ne: processDoc._id },
+    },
+    { $set: { active: false } },
+  );
+
+  return processDoc;
+};
+
 export const syncProductionInventory = async () => {
   await dropLegacyMasterIndexes();
 
@@ -32,21 +136,11 @@ export const syncProductionInventory = async () => {
   const expectedMachineCodes = new Set();
   const expectedProcessCodes = new Set();
 
+  const lineIdByCode = new Map();
+
   for (const lineRow of PRODUCTION_INVENTORY) {
-    let lineDoc = await MasterItem.findOne({ kind: 'line', code: lineRow.code });
-    if (!lineDoc) {
-      lineDoc = await MasterItem.create({
-        kind: 'line',
-        name: lineRow.lineName,
-        code: lineRow.code,
-        active: true,
-      });
-    } else {
-      lineDoc.name = lineRow.lineName;
-      lineDoc.active = true;
-      lineDoc.departmentId = null;
-      await lineDoc.save();
-    }
+    const lineDoc = await upsertLine(lineRow);
+    lineIdByCode.set(lineRow.code, lineDoc._id);
 
     lineRow.machines.forEach((machineRow, machineIndex) => {
       const mCode = machineCode(lineRow.code, machineRow.name, machineIndex);
@@ -59,49 +153,18 @@ export const syncProductionInventory = async () => {
   }
 
   for (const lineRow of PRODUCTION_INVENTORY) {
-    const lineDoc = await MasterItem.findOne({ kind: 'line', code: lineRow.code });
-    if (!lineDoc) continue;
+    const lineId = lineIdByCode.get(lineRow.code);
+    if (!lineId) continue;
 
     for (let machineIndex = 0; machineIndex < lineRow.machines.length; machineIndex += 1) {
       const machineRow = lineRow.machines[machineIndex];
       const mCode = machineCode(lineRow.code, machineRow.name, machineIndex);
-      let machineDoc = await MasterItem.findOne({ kind: 'machine', code: mCode });
-
-      if (!machineDoc) {
-        machineDoc = await MasterItem.create({
-          kind: 'machine',
-          name: machineRow.name,
-          code: mCode,
-          lineId: lineDoc._id,
-          active: true,
-        });
-      } else {
-        machineDoc.name = machineRow.name;
-        machineDoc.lineId = lineDoc._id;
-        machineDoc.active = true;
-        machineDoc.departmentId = null;
-        await machineDoc.save();
-      }
+      const machineDoc = await upsertMachine(machineRow, mCode, lineId);
 
       for (let processIndex = 0; processIndex < machineRow.processes.length; processIndex += 1) {
         const processName = machineRow.processes[processIndex];
         const pCode = processCode(mCode, processName, processIndex);
-        let processDoc = await MasterItem.findOne({ kind: 'process', code: pCode });
-
-        if (!processDoc) {
-          await MasterItem.create({
-            kind: 'process',
-            name: processName,
-            code: pCode,
-            machineId: machineDoc._id,
-            active: true,
-          });
-        } else {
-          processDoc.name = processName;
-          processDoc.machineId = machineDoc._id;
-          processDoc.active = true;
-          await processDoc.save();
-        }
+        await upsertProcess(processName, pCode, machineDoc._id);
       }
     }
   }

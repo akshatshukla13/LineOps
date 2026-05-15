@@ -2,16 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import ExcelJS from 'exceljs'
 
@@ -101,16 +91,6 @@ const masterTypeConfig = {
     icon: '❌',
   },
 }
-
-const reportTypes = [
-  { value: 'monitoring', label: 'Production Monitoring (Detailed)' },
-  { value: 'daily', label: 'Daily Report (Summary)' },
-  { value: 'line', label: 'Line-wise Report' },
-  { value: 'operator', label: 'Operator-wise Report' },
-  { value: 'machine', label: 'Machine-wise Report' },
-  { value: 'shift', label: 'Shift-wise Report' },
-  { value: 'dateRange', label: 'Date Range Report' },
-]
 
 const monitoringHourCount = 12
 const monitoringColumns = [
@@ -282,18 +262,17 @@ function App() {
   const [entryDraft, setEntryDraft] = useState(emptyEntry)
   const [editingEntryId, setEditingEntryId] = useState(null)
   const [reportFilters, setReportFilters] = useState({
-    type: 'daily',
-    date: new Date().toISOString().slice(0, 10),
+    dateMode: 'all',
     from: '',
     to: '',
-    shiftId: '',
-    operatorId: '',
-    machineId: '',
     lineId: '',
+    machineId: '',
+    processId: '',
+    shiftId: '',
+    operatorName: '',
   })
-  const [reportData, setReportData] = useState([])
   const [reportSpreadsheetRows, setReportSpreadsheetRows] = useState([])
-  const [dbSheetData, setDbSheetData] = useState([])
+  const [reportHasRun, setReportHasRun] = useState(false)
   const [missedEntries, setMissedEntries] = useState([])
   const [isSavingEntry, setIsSavingEntry] = useState(false)
   const [requestCount, setRequestCount] = useState(0)
@@ -422,6 +401,18 @@ function App() {
     return processes.filter((item) => item.machineId === entryDraft.machineId)
   }, [entryDraft.machineId, masters.process])
 
+  const filteredReportMachines = useMemo(() => {
+    const machines = (masters.machine || []).filter((item) => item.active !== false)
+    if (!reportFilters.lineId) return machines
+    return machines.filter((item) => String(item.lineId) === String(reportFilters.lineId))
+  }, [reportFilters.lineId, masters.machine])
+
+  const filteredReportProcesses = useMemo(() => {
+    const processes = (masters.process || []).filter((item) => item.active !== false)
+    if (!reportFilters.machineId) return processes
+    return processes.filter((item) => String(item.machineId) === String(reportFilters.machineId))
+  }, [reportFilters.machineId, masters.process])
+
   const calculated = useMemo(() => {
     const totalProduction = entryDraft.hourlyInputs.reduce((sum, value) => sum + Number(value || 0), 0)
     const netProduction = Math.max(totalProduction - Number(entryDraft.rejectQty || 0) - Number(entryDraft.reworkQty || 0), 0)
@@ -445,14 +436,19 @@ function App() {
   }, [calculated.efficiencyPct])
 
   const monitoringRows = useMemo(
-    () => (reportSpreadsheetRows.length > 0 ? reportSpreadsheetRows : reportData).map((row, index) => normalizeMonitoringRow(row, index)),
-    [reportData, reportSpreadsheetRows],
+    () => reportSpreadsheetRows.map((row, index) => normalizeMonitoringRow(row, index)),
+    [reportSpreadsheetRows],
   )
 
-  const dbSheetRows = useMemo(
-    () => dbSheetData.map((row, index) => normalizeMonitoringRow(row, index)),
-    [dbSheetData],
-  )
+  const reportSheetTitle = useMemo(() => {
+    if (reportFilters.dateMode === 'all') return 'Production Database — All Dates'
+    if (reportFilters.from && reportFilters.to) {
+      return `Production Database — ${formatDisplayDate(reportFilters.from)} to ${formatDisplayDate(reportFilters.to)}`
+    }
+    if (reportFilters.from) return `Production Database — From ${formatDisplayDate(reportFilters.from)}`
+    if (reportFilters.to) return `Production Database — Until ${formatDisplayDate(reportFilters.to)}`
+    return 'Production Database — Date Range'
+  }, [reportFilters.dateMode, reportFilters.from, reportFilters.to])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -471,11 +467,6 @@ function App() {
   const loadEntries = async () => {
     const data = await authFetch('/api/entries')
     setEntries(data)
-  }
-
-  const loadDbSheet = async () => {
-    const data = await authFetch('/api/reports?type=monitoring')
-    setDbSheetData(data.spreadsheetRows || data.report || [])
   }
 
   const loadUsers = async () => {
@@ -499,7 +490,7 @@ function App() {
   const bootstrap = async () => {
     try {
       setErrorText('')
-      await Promise.all([loadMasters(), loadEntries(), loadDbSheet(), loadUsers(), loadAuditLogs(), loadMissedEntries()])
+      await Promise.all([loadMasters(), loadEntries(), loadUsers(), loadAuditLogs(), loadMissedEntries()])
     } catch (error) {
       setErrorText(error.message)
     }
@@ -629,7 +620,7 @@ function App() {
 
       setEditingEntryId(null)
       setEntryDraft(emptyEntry())
-      await Promise.all([loadEntries(), loadDbSheet()])
+      await loadEntries()
     } catch (error) {
       const message =
         error instanceof z.ZodError
@@ -643,116 +634,86 @@ function App() {
   }
 
   const runReport = async () => {
+    setErrorText('')
     const query = new URLSearchParams()
-    Object.entries(reportFilters).forEach(([key, value]) => {
-      if (value && value !== UNSPECIFIED_TOKEN) query.set(key, value)
-    })
+    query.set('type', 'monitoring')
+    query.set('dateMode', reportFilters.dateMode)
+
+    if (reportFilters.dateMode === 'range') {
+      if (reportFilters.from) query.set('from', reportFilters.from)
+      if (reportFilters.to) query.set('to', reportFilters.to)
+    }
+
+    if (reportFilters.lineId) query.set('lineId', reportFilters.lineId)
+    if (reportFilters.machineId) query.set('machineId', reportFilters.machineId)
+    if (reportFilters.processId) query.set('processId', reportFilters.processId)
+    if (reportFilters.shiftId) query.set('shiftId', reportFilters.shiftId)
+    if (reportFilters.operatorName.trim()) query.set('operatorName', reportFilters.operatorName.trim())
 
     try {
       const data = await authFetch(`/api/reports?${query.toString()}`)
-      setReportData(data.report || [])
-      setReportSpreadsheetRows(data.spreadsheetRows || data.report || [])
+      setReportSpreadsheetRows(data.spreadsheetRows || [])
+      setReportHasRun(true)
+      setStatusText(`Loaded ${data.totalRows ?? 0} entries.`)
     } catch (error) {
       setErrorText(error.message)
     }
   }
 
   const exportReportExcel = async () => {
+    if (!monitoringRows.length) return
+
     const workbook = new ExcelJS.Workbook()
-    const worksheet = workbook.addWorksheet('Production Monitoring')
+    const worksheet = workbook.addWorksheet('Production Database')
+    const firstHourColumn = 10
+    const totalColumn = firstHourColumn + monitoringHourCount
 
-    if (reportFilters.type === 'monitoring' && monitoringRows.length > 0) {
-      const firstHourColumn = 9
-      const totalColumn = firstHourColumn + monitoringHourCount
-      const reportDate = formatDisplayDate(reportFilters.date || monitoringRows[0]?.date)
+    worksheet.columns = [
+      { key: 'sno', width: 6 },
+      { key: 'date', width: 12 },
+      ...monitoringColumns.slice(1).map((column) => ({ key: column.key, width: column.width })),
+    ]
+    worksheet.mergeCells(1, firstHourColumn, 1, totalColumn)
+    worksheet.getCell(1, firstHourColumn).value = reportSheetTitle
 
-      worksheet.columns = monitoringColumns.map((column) => ({ key: column.key, width: column.width }))
-      worksheet.mergeCells(1, firstHourColumn, 1, totalColumn)
-      worksheet.getCell(1, firstHourColumn).value = `Actual  Qty-Date-${reportDate}`
+    const headerLabels = ['S.No.', 'Date', ...monitoringColumns.slice(1).map((column) => column.label)]
+    headerLabels.forEach((label, index) => {
+      const columnNumber = index + 1
+      const isActualColumn = columnNumber >= firstHourColumn && columnNumber <= totalColumn
+      const cell = worksheet.getCell(isActualColumn ? 2 : 1, columnNumber)
+      cell.value = label
+      cell.alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+        textRotation: index > 0 && monitoringColumns[index - 1]?.vertical ? 90 : 0,
+        wrapText: true,
+      }
+      if (!isActualColumn) {
+        worksheet.mergeCells(1, columnNumber, 2, columnNumber)
+      }
+    })
 
-      monitoringColumns.forEach((column, index) => {
-        const columnNumber = index + 1
-        const isActualColumn = columnNumber >= firstHourColumn && columnNumber <= totalColumn
-        const cell = worksheet.getCell(isActualColumn ? 2 : 1, columnNumber)
-        cell.value = column.label
-        cell.alignment = {
-          horizontal: 'center',
-          vertical: 'middle',
-          textRotation: column.vertical ? 90 : 0,
-          wrapText: true,
-        }
-
-        if (!isActualColumn) {
-          worksheet.mergeCells(1, columnNumber, 2, columnNumber)
-        }
-      })
-
-      monitoringRows.forEach((row) => {
-        worksheet.addRow([
-          row.sno,
-          row.line,
-          row.machine,
-          row.operator,
-          row.process,
-          row.shift,
-          row.hours,
-          row.target,
-          ...row.hourlyInputs.map((value) => value || ''),
-          row.total,
-          row.rejected,
-          row.rework,
-          row.downtime,
-          row.reason,
-          row.efficiency,
-          row.remarks,
-        ])
-      })
-
-      worksheet.getRow(1).height = 28
-      worksheet.getRow(2).height = 46
-      worksheet.eachRow((row, rowNumber) => {
-        row.eachCell((cell) => {
-          cell.border = {
-            top: { style: 'thin' },
-            left: { style: 'thin' },
-            bottom: { style: 'thin' },
-            right: { style: 'thin' },
-          }
-          cell.alignment = cell.alignment || { horizontal: 'center', vertical: 'middle', wrapText: true }
-          if (rowNumber <= 2) {
-            cell.font = { bold: true }
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } }
-          }
-        })
-      })
-    } else {
-      // Summary report format
-      worksheet.columns = [
-        { header: 'Category', key: 'key', width: 20 },
-        { header: 'Records', key: 'records', width: 12 },
-        { header: 'Target Quantity', key: 'plannedQty', width: 16 },
-        { header: 'Total Production', key: 'totalProduction', width: 18 },
-        { header: 'Net Production', key: 'netProduction', width: 16 },
-        { header: 'Reject Qty', key: 'rejectQty', width: 12 },
-        { header: 'Rework Qty', key: 'reworkQty', width: 12 },
-        { header: 'Downtime Minutes', key: 'downtimeMinutes', width: 18 },
-        { header: 'Efficiency %', key: 'efficiencyPct', width: 14 },
-      ]
-
-      reportData.forEach((row) => {
-        worksheet.addRow({
-          key: row.label || row.key,
-          records: row.records,
-          plannedQty: row.plannedQty,
-          totalProduction: row.totalProduction,
-          netProduction: row.netProduction,
-          rejectQty: row.rejectQty,
-          reworkQty: row.reworkQty,
-          downtimeMinutes: row.downtimeMinutes,
-          efficiencyPct: row.efficiencyPct,
-        })
-      })
-    }
+    monitoringRows.forEach((row) => {
+      worksheet.addRow([
+        row.sno,
+        row.date,
+        row.line,
+        row.machine,
+        row.operator,
+        row.process,
+        row.shift,
+        row.hours,
+        row.target,
+        ...row.hourlyInputs.map((value) => value || ''),
+        row.total,
+        row.rejected,
+        row.rework,
+        row.downtime,
+        row.reason,
+        row.efficiency,
+        row.remarks,
+      ])
+    })
 
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], {
@@ -762,7 +723,7 @@ function App() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `lineops-${reportFilters.type}-report-${Date.now()}.xlsx`
+    link.download = `lineops-production-database-${Date.now()}.xlsx`
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -781,7 +742,7 @@ function App() {
       color: rgb(0.1, 0.1, 0.1),
     })
 
-    page.drawText(`Report Type: ${reportFilters.type} | Generated: ${new Date().toLocaleDateString()}`, {
+    page.drawText(`${reportSheetTitle} | Generated: ${new Date().toLocaleDateString()}`, {
       x: 30,
       y: 540,
       size: 10,
@@ -793,37 +754,22 @@ function App() {
     const lineHeight = 14
     const marginBottom = 20
 
-    const pdfRows = reportFilters.type === 'monitoring' ? monitoringRows : reportData
-
-    pdfRows.slice(0, 40).forEach((row) => {
+    monitoringRows.slice(0, 40).forEach((row) => {
       if (y < marginBottom) {
         page = pdfDoc.addPage([842, 595])
         y = 570
       }
 
-      if (reportFilters.type === 'monitoring') {
-        page.drawText(
-          `${row.date} | ${row.line} | ${row.machine} | ${row.operator} | Tgt: ${row.target} | Prod: ${row.total} | Eff: ${row.efficiency}`,
-          {
-            x: 30,
-            y,
-            size: 9,
-            font,
-            color: rgb(0.2, 0.2, 0.2),
-          },
-        )
-      } else {
-        page.drawText(
-          `${row.label || row.key} | Records: ${row.records} | Target: ${row.plannedQty} | Net: ${row.netProduction} | Efficiency: ${row.efficiencyPct}%`,
-          {
-            x: 30,
-            y,
-            size: 9,
-            font,
-            color: rgb(0.2, 0.2, 0.2),
-          },
-        )
-      }
+      page.drawText(
+        `${row.date} | ${row.line} | ${row.machine} | ${row.operator} | Tgt: ${row.target} | Prod: ${row.total} | Eff: ${row.efficiency}`,
+        {
+          x: 30,
+          y,
+          size: 9,
+          font,
+          color: rgb(0.2, 0.2, 0.2),
+        },
+      )
       y -= lineHeight
     })
 
@@ -970,8 +916,28 @@ function App() {
   }
 
   const changeReportFilter = (key, value) => {
-    setReportFilters((prev) => ({ ...prev, [key]: value }))
+    setReportFilters((prev) => {
+      const next = { ...prev, [key]: value }
+      if (key === 'dateMode' && value === 'all') {
+        next.from = ''
+        next.to = ''
+      }
+      if (key === 'lineId') {
+        next.machineId = ''
+        next.processId = ''
+      }
+      if (key === 'machineId') {
+        next.processId = ''
+      }
+      return next
+    })
   }
+
+  useEffect(() => {
+    if (!token || !user || activeTab !== 'reports') return
+    runReport()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, token, user?.role])
 
   const canUseAdmin = user?.role === 'admin'
   const canUseSupervisorViews = ['admin', 'supervisor'].includes(user?.role || '')
@@ -1024,7 +990,6 @@ function App() {
   const navigationTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { id: 'entry', label: 'Data Entry', icon: 'table_chart' },
-    { id: 'dbSheet', label: 'DB Excel View', icon: 'grid_on' },
     { id: 'reports', label: 'Reports', icon: 'insert_chart' },
     ...(canUseAdmin ? [
       { id: 'users', label: 'Users', icon: 'group' },
@@ -1342,221 +1307,118 @@ function App() {
           </section>
         ) : null}
 
-        {activeTab === 'dbSheet' ? (
+        {activeTab === 'reports' ? (
           <section className="grid gap-4">
             <div className="card">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="mb-1 text-base font-semibold">Production Database Report</h2>
+              <p className="mb-4 text-sm text-slate-500">
+                Full database view in Excel-style layout. Use filters to narrow results, or leave blank for all records.
+              </p>
+              <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-5">
                 <div>
-                  <h2 className="text-base font-semibold">Database Excel View</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    All role-visible production entries in one spreadsheet-style table.
-                  </p>
+                  <label className="mb-1 block text-xs font-semibold">Date Range</label>
+                  <select
+                    className="select"
+                    onChange={(e) => changeReportFilter('dateMode', e.target.value)}
+                    value={reportFilters.dateMode}
+                  >
+                    <option value="all">All dates</option>
+                    <option value="range">Custom range</option>
+                  </select>
                 </div>
-                <button className="btn-primary" onClick={loadDbSheet} type="button">
-                  Refresh DB View
+                <div>
+                  <label className="mb-1 block text-xs font-semibold">Start Date</label>
+                  <input
+                    className="input"
+                    disabled={reportFilters.dateMode === 'all'}
+                    onChange={(e) => changeReportFilter('from', e.target.value)}
+                    type="date"
+                    value={reportFilters.from}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold">End Date</label>
+                  <input
+                    className="input"
+                    disabled={reportFilters.dateMode === 'all'}
+                    onChange={(e) => changeReportFilter('to', e.target.value)}
+                    type="date"
+                    value={reportFilters.to}
+                  />
+                </div>
+                <SelectField
+                  emptyLabel="All lines"
+                  includeUnspecified={false}
+                  label="Line No."
+                  onChange={(v) => changeReportFilter('lineId', v)}
+                  options={optionsByKind('line')}
+                  value={reportFilters.lineId}
+                />
+                <SelectField
+                  emptyLabel="All machines"
+                  includeUnspecified={false}
+                  label="Machine"
+                  onChange={(v) => changeReportFilter('machineId', v)}
+                  options={filteredReportMachines}
+                  value={reportFilters.machineId}
+                />
+                <div>
+                  <label className="mb-1 block text-xs font-semibold">Operator Name</label>
+                  <input
+                    className="input"
+                    onChange={(e) => changeReportFilter('operatorName', e.target.value)}
+                    placeholder="Search operator name"
+                    type="text"
+                    value={reportFilters.operatorName}
+                  />
+                </div>
+                <SelectField
+                  emptyLabel="All processes"
+                  includeUnspecified={false}
+                  label="Process Name"
+                  onChange={(v) => changeReportFilter('processId', v)}
+                  options={filteredReportProcesses}
+                  value={reportFilters.processId}
+                />
+                <SelectField
+                  emptyLabel="All shifts"
+                  includeUnspecified={false}
+                  label="Shift"
+                  onChange={(v) => changeReportFilter('shiftId', v)}
+                  options={optionsByKind('shift')}
+                  value={reportFilters.shiftId}
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button className="btn-primary" onClick={runReport} type="button">
+                  Apply Filters
+                </button>
+                <button className="btn-muted" disabled={!monitoringRows.length} onClick={exportReportExcel} type="button">
+                  Export Excel
+                </button>
+                <button className="btn-muted" disabled={!monitoringRows.length} onClick={exportReportPdf} type="button">
+                  Export PDF
                 </button>
               </div>
             </div>
 
             <div className="card">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold">All Entries - {dbSheetRows.length} rows</h3>
-                <span className="text-xs text-slate-500">Includes Date, 1-12 hourly actuals, total, quality, downtime, and remarks.</span>
+                <h3 className="text-sm font-semibold">
+                  Database View — {monitoringRows.length} {monitoringRows.length === 1 ? 'row' : 'rows'}
+                </h3>
+                <span className="text-xs text-slate-500">{reportSheetTitle}</span>
               </div>
-
-              {dbSheetRows.length > 0 ? (
-                <ExcelSheet rows={dbSheetRows} includeDate title="Actual Qty-Date-All Entries" />
+              {reportHasRun && monitoringRows.length > 0 ? (
+                <ExcelSheet includeDate rows={monitoringRows} title={reportSheetTitle} />
               ) : (
                 <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-                  No production entries found in the database for your role.
+                  {reportHasRun
+                    ? 'No entries match the selected filters.'
+                    : 'Loading production database...'}
                 </div>
               )}
             </div>
-          </section>
-        ) : null}
-
-        {activeTab === 'reports' ? (
-          <section className="grid gap-4">
-            {/* Filter Section */}
-            <div className="card">
-              <h2 className="mb-4 text-base font-semibold flex items-center gap-2">
-                <span>📊</span> Production Monitoring Report
-              </h2>
-              <div className="grid gap-3 md:grid-cols-5">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">Report Type</label>
-                  <select className="select" onChange={(e) => changeReportFilter('type', e.target.value)} value={reportFilters.type}>
-                    {reportTypes.map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                  </select>
-                </div>
-                {reportFilters.type === 'monitoring' ? (
-                  <>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold">Date</label>
-                      <input className="input" onChange={(e) => changeReportFilter('date', e.target.value)} type="date" value={reportFilters.date} />
-                    </div>
-                    <SelectField label="Line" options={optionsByKind('line')} onChange={(v) => changeReportFilter('lineId', v)} value={reportFilters.lineId} />
-                    <SelectField label="Shift" options={optionsByKind('shift')} onChange={(v) => changeReportFilter('shiftId', v)} value={reportFilters.shiftId} />
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold">From Date</label>
-                      <input className="input" onChange={(e) => changeReportFilter('from', e.target.value)} type="date" value={reportFilters.from} />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold">To Date</label>
-                      <input className="input" onChange={(e) => changeReportFilter('to', e.target.value)} type="date" value={reportFilters.to} />
-                    </div>
-                    <SelectField label="Operator" options={optionsByKind('operator')} onChange={(v) => changeReportFilter('operatorId', v)} value={reportFilters.operatorId} />
-                    <SelectField label="Machine" options={optionsByKind('machine')} onChange={(v) => changeReportFilter('machineId', v)} value={reportFilters.machineId} />
-                  </>
-                )}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button className="btn-primary" onClick={runReport} type="button">
-                  🔍 Generate Report
-                </button>
-                <button className="btn-muted" onClick={exportReportExcel} disabled={(reportFilters.type === 'monitoring' ? monitoringRows : reportData).length === 0} type="button">
-                  📊 Export Excel (.xlsx)
-                </button>
-                <button className="btn-muted" onClick={exportReportPdf} disabled={(reportFilters.type === 'monitoring' ? monitoringRows : reportData).length === 0} type="button">
-                  📄 Export PDF
-                </button>
-              </div>
-            </div>
-
-            {/* Production Monitoring Table - Show if data exists */}
-            {monitoringRows.length > 0 && reportFilters.type === 'monitoring' ? (
-              <div className="card">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold">
-                    Production Monitoring Table - {formatDisplayDate(reportFilters.date)}
-                  </h3>
-                  <span className="text-xs text-slate-500">Excel export uses this same input/output format.</span>
-                </div>
-                <div className="monitoring-sheet overflow-x-auto">
-                  <table>
-                    <thead>
-                      <tr>
-                        {monitoringColumns.slice(0, 8).map((column) => (
-                          <th className={column.vertical ? 'vertical-head' : ''} key={column.key} rowSpan={2}>
-                            {column.label}
-                          </th>
-                        ))}
-                        <th className="actual-head" colSpan={monitoringHourCount + 1}>
-                          Actual&nbsp; Qty-Date-{formatDisplayDate(reportFilters.date || monitoringRows[0]?.date)}
-                        </th>
-                        {monitoringColumns.slice(21).map((column) => (
-                          <th className={column.vertical ? 'vertical-head' : ''} key={column.key} rowSpan={2}>
-                            {column.label}
-                          </th>
-                        ))}
-                      </tr>
-                      <tr>
-                        {Array.from({ length: monitoringHourCount }, (_, index) => (
-                          <th className="hour-head" key={`hour-head-${index + 1}`}>
-                            {index + 1}
-                          </th>
-                        ))}
-                        <th className="hour-head">T</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {monitoringRows.map((item) => (
-                        <tr key={`${item.sno}-${item.machine}-${item.operator}`}>
-                          <td>{item.sno}</td>
-                          <td>{item.line}</td>
-                          <td className="sheet-text">{item.machine}</td>
-                          <td className="sheet-text">{item.operator}</td>
-                          <td className="sheet-text">{item.process}</td>
-                          <td>{item.shift}</td>
-                          <td>{item.hours}</td>
-                          <td>{item.target}</td>
-                          {item.hourlyInputs.map((value, index) => (
-                            <td key={`${item.sno}-h-${index}`}>{value || ''}</td>
-                          ))}
-                          <td className="sheet-total">{item.total}</td>
-                          <td>{item.rejected}</td>
-                          <td>{item.rework}</td>
-                          <td>{item.downtime}</td>
-                          <td className="sheet-text">{item.reason}</td>
-                          <td>{item.efficiency}</td>
-                          <td className="sheet-text">{item.remarks}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : null}
-
-            {/* Summary Chart - Show for other report types */}
-            {reportData.length > 0 && reportFilters.type !== 'monitoring' ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="card">
-                  <h3 className="mb-2 text-base font-semibold">Production Summary Chart</h3>
-                  <div className="h-72 w-full">
-                    <ResponsiveContainer>
-                      <BarChart data={reportData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="label" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="plannedQty" fill="#94a3b8" name="Target Quantity" />
-                        <Bar dataKey="netProduction" fill="#2563eb" name="Net Production" />
-                        <Bar dataKey="downtimeMinutes" fill="#f97316" name="Downtime (min)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="card overflow-x-auto">
-                  <h3 className="mb-3 text-base font-semibold">Summary Table</h3>
-                  <table className="min-w-full text-xs">
-                    <thead>
-                      <tr className="bg-slate-200 dark:bg-slate-800">
-                        <HeaderCell text="Category" />
-                        <HeaderCell text="Records" />
-                        <HeaderCell text="Target Quantity" />
-                        <HeaderCell text="Total" />
-                        <HeaderCell text="Net" />
-                        <HeaderCell text="Reject" />
-                        <HeaderCell text="Rework" />
-                        <HeaderCell text="Downtime" />
-                        <HeaderCell text="Efficiency %" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportData.map((item) => (
-                        <tr key={item.key}>
-                          <BodyCell className="font-semibold">{item.label || item.key}</BodyCell>
-                          <BodyCell>{item.records}</BodyCell>
-                          <BodyCell>{item.plannedQty}</BodyCell>
-                          <BodyCell>{item.totalProduction}</BodyCell>
-                          <BodyCell className="text-green-600 font-semibold">{item.netProduction}</BodyCell>
-                          <BodyCell className="text-red-600">{item.rejectQty}</BodyCell>
-                          <BodyCell className="text-orange-600">{item.reworkQty}</BodyCell>
-                          <BodyCell className="text-red-700">{item.downtimeMinutes}</BodyCell>
-                          <BodyCell className="font-semibold">{item.efficiencyPct}%</BodyCell>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : null}
-
-            {reportData.length === 0 ? (
-              <div className="card flex flex-col items-center justify-center py-12 text-center">
-                <p className="text-4xl mb-2">📊</p>
-                <p className="text-base font-semibold">Generate a report to view data</p>
-                <p className="text-sm text-slate-500 mt-1">Select filters and click "Generate Report" above</p>
-              </div>
-            ) : null}
           </section>
         ) : null}
 
@@ -1934,13 +1796,13 @@ function BodyCell({ children, className = '' }) {
   return <td className={`border-b border-slate-200 p-2 align-top dark:border-slate-800 ${className}`}>{children}</td>
 }
 
-function SelectField({ label, value, onChange, options }) {
+function SelectField({ label, value, onChange, options, emptyLabel, includeUnspecified = true }) {
   return (
     <div>
       <label className="mb-1 block text-xs font-semibold">{label}</label>
       <select className="select" onChange={(e) => onChange(e.target.value)} value={value || ''}>
-        <option value="">Select {label}</option>
-        <option value={UNSPECIFIED_TOKEN}>Unspecified</option>
+        <option value="">{emptyLabel || `Select ${label}`}</option>
+        {includeUnspecified ? <option value={UNSPECIFIED_TOKEN}>Unspecified</option> : null}
         {options.map((item) => (
           <option key={item._id} value={item._id}>{item.name}</option>
         ))}

@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { ProductionEntry } from '../models/index.js';
-import { authMiddleware, requireRole } from '../middleware/auth.js';
+import { ProductionEntry, MasterItem } from '../models/index.js';
+import { authMiddleware } from '../middleware/auth.js';
 import { isValidObjectId, isValidDateString, asObjectIdOrNull } from '../utils/validators.js';
 
 const router = Router();
@@ -21,14 +21,7 @@ const getShiftCode = (value) => {
   return compact ? compact.charAt(0).toUpperCase() : '-';
 };
 
-const getSummaryLabel = (type, entry) => {
-  if (type === 'daily' || type === 'dateRange') return formatDisplayDate(entry.date);
-  if (type === 'line') return getMasterLabel(entry.lineId, entry.lineId?.name || entry.lineId?.code || '-');
-  if (type === 'operator') return getMasterLabel(entry.operatorId, entry.operatorId?.name || entry.operatorId?.code || '-');
-  if (type === 'machine') return getMasterLabel(entry.machineId, entry.machineId?.name || entry.machineId?.code || '-');
-  if (type === 'shift') return getMasterLabel(entry.shiftId, entry.shiftId?.name || entry.shiftId?.code || '-');
-  return formatDisplayDate(entry.date);
-};
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const toMonitoringExportRow = (entry, index) => {
   const hourlyInputs = [...(entry.hourlyInputs || []), ...Array(MONITORING_HOUR_COUNT).fill('')].slice(0, MONITORING_HOUR_COUNT);
@@ -57,46 +50,65 @@ const toMonitoringExportRow = (entry, index) => {
 
 router.get('/', authMiddleware, async (req, res) => {
   const {
-    type = 'daily',
-    date,
+    type = 'monitoring',
+    dateMode = 'range',
     from,
     to,
     shiftId,
-    operatorId,
     machineId,
-    departmentId,
     lineId,
+    processId,
+    operatorName,
   } = req.query;
 
-  const allowedReportTypes = new Set(['monitoring', 'daily', 'line', 'operator', 'machine', 'shift', 'dateRange']);
-  if (!allowedReportTypes.has(type)) {
-    return res.status(400).json({ error: 'Invalid report type.' });
+  if (type !== 'monitoring') {
+    return res.status(400).json({ error: 'Only monitoring reports are supported.' });
   }
 
   const query = {};
-  if (date) {
-    if (!isValidDateString(date)) return res.status(400).json({ error: 'Invalid date.' });
-    query.date = new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10);
+
+  if (dateMode !== 'all') {
+    if (from || to) {
+      query.date = {};
+      if (from) {
+        if (!isValidDateString(from)) return res.status(400).json({ error: 'Invalid from date.' });
+        query.date.$gte = new Date(`${from}T00:00:00.000Z`).toISOString().slice(0, 10);
+      }
+      if (to) {
+        if (!isValidDateString(to)) return res.status(400).json({ error: 'Invalid to date.' });
+        query.date.$lte = new Date(`${to}T00:00:00.000Z`).toISOString().slice(0, 10);
+      }
+    }
   }
 
-  const reportIdFilters = { shiftId, operatorId, machineId, departmentId, lineId };
-  for (const [field, rawValue] of Object.entries(reportIdFilters)) {
+  const idFilters = { shiftId, machineId, lineId, processId };
+  for (const [field, rawValue] of Object.entries(idFilters)) {
     if (!rawValue) continue;
     const sanitizedId = asObjectIdOrNull(rawValue);
     if (!sanitizedId) return res.status(400).json({ error: `Invalid ${field}.` });
     query[field] = sanitizedId;
   }
 
-  if (from || to) {
-    query.date = {};
-    if (from) {
-      if (!isValidDateString(from)) return res.status(400).json({ error: 'Invalid from date.' });
-      query.date.$gte = new Date(`${from}T00:00:00.000Z`).toISOString().slice(0, 10);
+  const operatorSearch = String(operatorName || '').trim();
+  if (operatorSearch) {
+    const matchingOperators = await MasterItem.find({
+      kind: 'operator',
+      name: { $regex: escapeRegex(operatorSearch), $options: 'i' },
+    })
+      .select('_id')
+      .lean();
+
+    if (!matchingOperators.length) {
+      return res.json({
+        type: 'monitoring',
+        totalRows: 0,
+        report: [],
+        spreadsheetRows: [],
+        sourceCount: 0,
+      });
     }
-    if (to) {
-      if (!isValidDateString(to)) return res.status(400).json({ error: 'Invalid to date.' });
-      query.date.$lte = new Date(`${to}T00:00:00.000Z`).toISOString().slice(0, 10);
-    }
+
+    query.operatorId = { $in: matchingOperators.map((item) => item._id) };
   }
 
   if (req.user.role === 'operator') {
@@ -104,87 +116,32 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 
   if (req.user.role === 'supervisor' && req.user.assignedLines?.length) {
-    query.lineId = { $in: req.user.assignedLines };
+    if (query.lineId) {
+      const allowed = req.user.assignedLines.some((id) => String(id) === String(query.lineId));
+      if (!allowed) {
+        return res.status(403).json({ error: 'You cannot view this line.' });
+      }
+    } else {
+      query.lineId = { $in: req.user.assignedLines };
+    }
   }
 
-  // For monitoring report type, return detailed entries with populated references
-  if (type === 'monitoring') {
-    const entries = await ProductionEntry.find(query)
-      .populate('shiftId', 'name code')
-      .populate('departmentId', 'name code')
-      .populate('lineId', 'name code')
-      .populate('machineId', 'name code')
-      .populate('processId', 'name code')
-      .populate('operatorId', 'name code')
-      .populate('productId', 'name code')
-      .populate('downtimeReasonId', 'name code')
-      .sort({ date: -1, shiftId: 1 })
-      .lean();
-
-    return res.json({
-      type,
-      totalRows: entries.length,
-      report: entries,
-      spreadsheetRows: entries.map(toMonitoringExportRow),
-      sourceCount: entries.length,
-    });
-  }
-
-  // For other report types, return aggregated data with human-readable labels.
   const entries = await ProductionEntry.find(query)
     .populate('shiftId', 'name code')
-    .populate('departmentId', 'name code')
     .populate('lineId', 'name code')
     .populate('machineId', 'name code')
     .populate('processId', 'name code')
     .populate('operatorId', 'name code')
+    .sort({ date: -1, createdAt: -1 })
     .lean();
 
-  const groupKeyByType = {
-    daily: 'date',
-    line: 'lineId',
-    operator: 'operatorId',
-    machine: 'machineId',
-    shift: 'shiftId',
-    dateRange: 'date',
-  };
-
-  const keyField = groupKeyByType[type] || 'date';
-  const bucket = new Map();
-
-  for (const entry of entries) {
-    const key = String(entry[keyField] || 'unknown');
-    if (!bucket.has(key)) {
-      bucket.set(key, {
-        key,
-        label: getSummaryLabel(type, entry),
-        records: 0,
-        plannedQty: 0,
-        totalProduction: 0,
-        netProduction: 0,
-        rejectQty: 0,
-        reworkQty: 0,
-        downtimeMinutes: 0,
-        efficiencyPct: 0,
-      });
-    }
-
-    const item = bucket.get(key);
-    item.records += 1;
-    item.plannedQty += Number(entry.plannedQty || 0);
-    item.totalProduction += Number(entry.totalProduction || 0);
-    item.netProduction += Number(entry.netProduction || 0);
-    item.rejectQty += Number(entry.rejectQty || 0);
-    item.reworkQty += Number(entry.reworkQty || 0);
-    item.downtimeMinutes += Number(entry.downtimeMinutes || 0);
-  }
-
-  const report = Array.from(bucket.values()).map((row) => ({
-    ...row,
-    efficiencyPct: row.plannedQty > 0 ? Number(((row.netProduction / row.plannedQty) * 100).toFixed(2)) : 0,
-  }));
-
-  return res.json({ type, totalRows: report.length, report, spreadsheetRows: report, sourceCount: entries.length });
+  return res.json({
+    type: 'monitoring',
+    totalRows: entries.length,
+    report: entries,
+    spreadsheetRows: entries.map(toMonitoringExportRow),
+    sourceCount: entries.length,
+  });
 });
 
 export default router;
