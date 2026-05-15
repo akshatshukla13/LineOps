@@ -35,6 +35,7 @@ export const useTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     localStorage.setItem('lineops_theme', newTheme);
+    document.documentElement.classList.toggle('dark', newTheme === 'dark');
   }, [theme]);
 
   return { theme, toggleTheme };

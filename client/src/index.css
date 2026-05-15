@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   font-family: 'Aptos', 'Segoe UI', Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   color: #191c1d;
@@ -14,6 +16,14 @@ body {
     radial-gradient(circle at top left, rgba(0, 30, 64, 0.08), transparent 28%),
     radial-gradient(circle at top right, rgba(58, 95, 148, 0.08), transparent 24%),
     linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+}
+
+.dark body {
+  background:
+    radial-gradient(circle at top left, rgba(58, 95, 148, 0.12), transparent 28%),
+    radial-gradient(circle at top right, rgba(0, 30, 64, 0.18), transparent 24%),
+    linear-gradient(180deg, #020617 0%, #0f172a 100%);
+  color: #e2e8f0;
 }
 
 @keyframes loading-rail-sweep {
@@ -47,6 +57,146 @@ body {
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
 }
 
+.dark .loading-pill {
+  border-color: rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.95);
+  color: #cbd5e1;
+}
+
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-loader-spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(0, 30, 64, 0.15);
+  border-top-color: #001e40;
+  border-radius: 50%;
+  animation: app-spin 0.75s linear infinite;
+}
+
+.app-loader-spinner--md {
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
+}
+
+.dark .app-loader-spinner {
+  border-color: rgba(148, 163, 184, 0.25);
+  border-top-color: #93c5fd;
+}
+
+.app-loader-panel {
+  border: 1px solid rgba(0, 30, 64, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 0.85rem 1.1rem;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+}
+
+.dark .app-loader-panel {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.96);
+}
+
+.app-dialog-panel {
+  border-radius: 14px;
+  border: 1px solid rgba(0, 30, 64, 0.12);
+  background: #fff;
+  padding: 1.25rem 1.35rem;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
+}
+
+.dark .app-dialog-panel {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: #0f172a;
+}
+
+.app-dialog-icon {
+  display: flex;
+  height: 40px;
+  width: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.app-dialog-icon--error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.dark .app-dialog-icon--error {
+  background: rgba(127, 29, 29, 0.35);
+  color: #fca5a5;
+}
+
+.app-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  padding: 0.75rem 0.85rem;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+  animation: toast-in 0.25s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-toast--success {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.app-toast--info {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.dark .app-toast--success {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(20, 83, 45, 0.45);
+  color: #bbf7d0;
+}
+
+.dark .app-toast--info {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(30, 58, 138, 0.45);
+  color: #bfdbfe;
+}
+
+.app-toast-close {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+  padding: 0;
+}
+
+.app-toast-close:hover {
+  opacity: 1;
+}
+
 .input,
 .select,
 .textarea {
@@ -71,6 +221,11 @@ body {
   border: 1px solid #111827;
   background: #fff;
   overscroll-behavior: contain;
+}
+
+.dark .monitoring-sheet {
+  border-color: #475569;
+  background: #0f172a;
 }
 
 .monitoring-sheet table {
@@ -99,6 +254,23 @@ body {
   height: 46px;
   background: #fff;
   font-weight: 700;
+}
+
+.dark .monitoring-sheet table {
+  color: #e2e8f0;
+}
+
+.dark .monitoring-sheet th,
+.dark .monitoring-sheet td {
+  border-color: #475569;
+}
+
+.dark .monitoring-sheet thead th {
+  background: #1e293b;
+}
+
+.dark .monitoring-sheet tbody td {
+  background: #0f172a;
 }
 
 .monitoring-sheet .actual-head {
@@ -193,20 +365,75 @@ body {
   position: sticky;
   left: 42px;
   z-index: 3;
-  min-width: 88px;
+  min-width: 72px;
   background: #fff;
 }
 
 .db-excel-sheet th:nth-child(3),
 .db-excel-sheet td:nth-child(3) {
   position: sticky;
-  left: 130px;
+  left: 114px;
   z-index: 3;
   min-width: 56px;
   background: #fff;
   box-shadow: 1px 0 0 #111;
 }
 
+.db-excel-sheet.has-date-col th:nth-child(2),
+.db-excel-sheet.has-date-col td:nth-child(2) {
+  min-width: 88px;
+}
+
+.db-excel-sheet.has-date-col th:nth-child(3),
+.db-excel-sheet.has-date-col td:nth-child(3) {
+  left: 130px;
+  min-width: 56px;
+  box-shadow: none;
+}
+
+.db-excel-sheet.has-date-col th:nth-child(4),
+.db-excel-sheet.has-date-col td:nth-child(4) {
+  position: sticky;
+  left: 186px;
+  z-index: 3;
+  min-width: 120px;
+  background: #fff;
+  box-shadow: 1px 0 0 #111;
+}
+
 .db-excel-sheet thead th:nth-child(-n + 3) {
   z-index: 4;
+}
+
+.db-excel-sheet.has-date-col thead th:nth-child(-n + 4) {
+  z-index: 4;
+}
+
+.dark .db-excel-sheet th:nth-child(1),
+.dark .db-excel-sheet td:nth-child(1),
+.dark .db-excel-sheet th:nth-child(2),
+.dark .db-excel-sheet td:nth-child(2),
+.dark .db-excel-sheet th:nth-child(3),
+.dark .db-excel-sheet td:nth-child(3),
+.dark .db-excel-sheet.has-date-col th:nth-child(4),
+.dark .db-excel-sheet.has-date-col td:nth-child(4) {
+  background: #1e293b;
+}
+
+.monitoring-sheet .sheet-header-row th {
+  background: #f8fafc;
+}
+
+.monitoring-sheet .sheet-hour-row th {
+  top: 46px;
+  z-index: 2;
+  background: #f1f5f9;
+}
+
+.dark .monitoring-sheet .sheet-header-row th {
+  background: #1e293b;
+}
+
+.dark .monitoring-sheet .sheet-hour-row th {
+  background: #334155;
 }

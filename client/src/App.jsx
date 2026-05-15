@@ -2,13 +2,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import ExcelJS from 'exceljs'
+import { downloadMonitoringPdf } from './utils/exportMonitoringPdf.js'
+import { ErrorDialog } from './components/ErrorDialog.jsx'
+import { GlobalLoader, SectionLoader } from './components/GlobalLoader.jsx'
+import { ToastStack } from './components/ToastStack.jsx'
+import { useAppFeedback } from './hooks/useAppFeedback.js'
 
 const TOKEN_KEY = 'lineops_token'
 const USER_KEY = 'lineops_user'
 const THEME_KEY = 'lineops_theme'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+
+const APP_BRAND = {
+  short: 'Dewas_HydroQuip',
+  tagline: 'Manufacturing Data Hub',
+  full: 'Dewas_HydroQuip Manufacturing Data Hub',
+}
+
+const todayDateString = () => new Date().toISOString().slice(0, 10)
 
 if (import.meta.env.PROD && !import.meta.env.VITE_API_BASE_URL) {
   throw new Error('VITE_API_BASE_URL is required in production builds')
@@ -115,6 +127,20 @@ const monitoringColumns = [
   { key: 'efficiency', label: 'Efficiency (%)', width: 10, vertical: true },
   { key: 'remarks', label: 'Remarks', width: 16, vertical: true },
 ]
+
+const HOUR_COLUMNS = monitoringColumns.filter((column) => /^h\d+$/.test(column.key))
+const TRAILING_COLUMNS = monitoringColumns.filter((column) =>
+  ['rejected', 'rework', 'downtime', 'reason', 'efficiency', 'remarks'].includes(column.key),
+)
+
+const getLeadingColumns = (includeDate) =>
+  includeDate
+    ? [
+        monitoringColumns[0],
+        { key: 'date', label: 'Date', width: 12 },
+        ...monitoringColumns.slice(1, 8),
+      ]
+    : monitoringColumns.slice(0, 8)
 
 const formatDisplayDate = (value) => {
   if (!value) return ''
@@ -253,12 +279,10 @@ function App() {
   })
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light')
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [statusText, setStatusText] = useState('')
-  const [errorText, setErrorText] = useState('')
+  const { toasts, errorDialog, showSuccess, showError, dismissError, removeToast } = useAppFeedback()
   const [masters, setMasters] = useState({})
   const [users, setUsers] = useState([])
   const [entries, setEntries] = useState([])
-  const [auditLogs, setAuditLogs] = useState([])
   const [entryDraft, setEntryDraft] = useState(emptyEntry)
   const [editingEntryId, setEditingEntryId] = useState(null)
   const [reportFilters, setReportFilters] = useState({
@@ -275,6 +299,8 @@ function App() {
   const [reportHasRun, setReportHasRun] = useState(false)
   const [missedEntries, setMissedEntries] = useState([])
   const [isSavingEntry, setIsSavingEntry] = useState(false)
+  const [isBootstrapping, setIsBootstrapping] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const [requestCount, setRequestCount] = useState(0)
   const [loadingMessage, setLoadingMessage] = useState('')
   const [masterForm, setMasterForm] = useState({
@@ -307,6 +333,14 @@ function App() {
 
 
   const isLoading = requestCount > 0
+  const isBusy = isLoading || isBootstrapping || isSavingEntry || isExporting
+
+  const busyMessage = useMemo(() => {
+    if (isSavingEntry) return 'Saving production entry...'
+    if (isExporting) return 'Generating export file...'
+    if (isBootstrapping) return 'Loading application data...'
+    return loadingMessage || 'Please wait...'
+  }, [isSavingEntry, isExporting, isBootstrapping, loadingMessage])
 
   useEffect(() => {
     if (requestCount > 0) {
@@ -475,12 +509,6 @@ function App() {
     setUsers(data)
   }
 
-  const loadAuditLogs = async () => {
-    if (!['admin', 'supervisor'].includes(user?.role || '')) return
-    const data = await authFetch('/api/audit-logs')
-    setAuditLogs(data)
-  }
-
   const loadMissedEntries = async () => {
     if (!['admin', 'supervisor'].includes(user?.role || '')) return
     const data = await authFetch('/api/notifications/missed-entries')
@@ -489,10 +517,12 @@ function App() {
 
   const bootstrap = async () => {
     try {
-      setErrorText('')
-      await Promise.all([loadMasters(), loadEntries(), loadUsers(), loadAuditLogs(), loadMissedEntries()])
+      setIsBootstrapping(true)
+      await Promise.all([loadMasters(), loadEntries(), loadUsers(), loadMissedEntries()])
     } catch (error) {
-      setErrorText(error.message)
+      showError(error.message, 'Failed to load data')
+    } finally {
+      setIsBootstrapping(false)
     }
   }
 
@@ -509,16 +539,14 @@ function App() {
     setUser(null)
     setActiveTab('dashboard')
     setEntries([])
-    setDbSheetData([])
     setUsers([])
     setMasters({})
-    setAuditLogs([])
     setMissedEntries([])
   }
 
   const handleLogin = loginForm.handleSubmit(async (values) => {
-    setErrorText('')
-    setStatusText('Signing in...')
+    
+    
     try {
       beginRequest('Signing in...')
       const data = await fetch(`${API_BASE_URL}/api/auth/login`, {
@@ -537,10 +565,10 @@ function App() {
       setUser(data.user)
       localStorage.setItem(TOKEN_KEY, data.token)
       localStorage.setItem(USER_KEY, JSON.stringify(data.user))
-      setStatusText('Signed in.')
+      setActiveTab(data.user.role === 'operator' ? 'entry' : 'dashboard')
+      showSuccess('Signed in successfully.', 'Welcome')
     } catch (error) {
-      setErrorText(error.message)
-      setStatusText('')
+      showError(error.message, 'Sign in failed')
     } finally {
       endRequest()
     }
@@ -569,20 +597,69 @@ function App() {
     })
   }
 
+  const canEditEntryRow = useCallback(
+    (entry) => {
+      if (!user || !entry) return false
+      if (user.role === 'admin') return true
+      if (entry.status === 'locked') return false
+      const createdBy = entry.createdBy?._id || entry.createdBy?.id || entry.createdBy
+      if (user.role === 'operator') {
+        return String(createdBy) === String(user.id) && entry.date === todayDateString()
+      }
+      if (user.role === 'supervisor') {
+        const yesterday = new Date()
+        yesterday.setDate(yesterday.getDate() - 1)
+        const yesterdayStr = yesterday.toISOString().slice(0, 10)
+        const inWindow = entry.date === todayDateString() || entry.date === yesterdayStr
+        const lineMatch =
+          !user.assignedLines?.length ||
+          user.assignedLines.some((lineId) => String(lineId) === String(entry.lineId?._id || entry.lineId))
+        return inWindow && lineMatch
+      }
+      return false
+    },
+    [user],
+  )
+
+  const toggleEntryLock = async (entry) => {
+    if (user?.role !== 'admin') return
+    const isLocked = entry.status === 'locked'
+    const action = isLocked ? 'unlock' : 'lock'
+    try {
+      
+      await authFetch(`/api/entries/${entry._id}/${action}`, { method: 'POST' })
+      if (editingEntryId === entry._id && !isLocked) {
+        setEditingEntryId(null)
+        setEntryDraft(emptyEntry())
+      }
+      await loadEntries()
+      showSuccess(isLocked ? 'Entry unlocked. Operators can edit again.' : 'Entry locked. Operators cannot edit this record.')
+    } catch (error) {
+      showError(error.message)
+    }
+  }
+
   const loadEntryForEdit = (entry) => {
-    if (entry.status === 'locked') {
-      setErrorText('Locked entries cannot be edited.')
+    if (!canEditEntryRow(entry)) {
+      showError(
+        entry.status === 'locked'
+          ? 'This entry is locked by admin and cannot be edited.'
+          : user?.role === 'operator'
+            ? 'You can only edit entries you created today.'
+            : 'This entry cannot be edited.',
+        entry.status === 'locked' ? 'Entry locked' : 'Cannot edit',
+      )
       return
     }
-    setErrorText('')
+    
     setEditingEntryId(entry._id)
     setEntryDraft(entryToDraft(entry))
-    setStatusText('Entry loaded for editing. Update fields and click Save.')
+    showSuccess('Entry loaded for editing.', 'Edit mode')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const saveEntry = async () => {
-    setErrorText('')
+    
     try {
       const normalized = {
         ...entryDraft,
@@ -594,7 +671,7 @@ function App() {
       }
       const parsed = entrySchema.parse(normalized)
       setIsSavingEntry(true)
-      setStatusText(editingEntryId ? 'Updating...' : 'Saving...')
+      
       const payload = {
         ...normalized,
         ...parsed,
@@ -609,13 +686,13 @@ function App() {
           method: 'PUT',
           body: JSON.stringify(payload),
         })
-        setStatusText('Entry updated.')
+        showSuccess('Entry updated successfully.')
       } else {
         await authFetch('/api/entries', {
           method: 'POST',
           body: JSON.stringify(payload),
         })
-        setStatusText('Entry saved.')
+        showSuccess('Entry saved successfully.')
       }
 
       setEditingEntryId(null)
@@ -626,15 +703,15 @@ function App() {
         error instanceof z.ZodError
           ? error.issues[0]?.message
           : error.message || 'Could not save entry.'
-      setErrorText(message)
-      setStatusText('')
+      showError(message, 'Validation error')
+      
     } finally {
       setIsSavingEntry(false)
     }
   }
 
   const runReport = async () => {
-    setErrorText('')
+    
     const query = new URLSearchParams()
     query.set('type', 'monitoring')
     query.set('dateMode', reportFilters.dateMode)
@@ -654,15 +731,18 @@ function App() {
       const data = await authFetch(`/api/reports?${query.toString()}`)
       setReportSpreadsheetRows(data.spreadsheetRows || [])
       setReportHasRun(true)
-      setStatusText(`Loaded ${data.totalRows ?? 0} entries.`)
+      showSuccess(`Loaded ${data.totalRows ?? 0} entries.`, 'Report ready')
     } catch (error) {
-      setErrorText(error.message)
+      showError(error.message)
     }
   }
 
   const exportReportExcel = async () => {
     if (!monitoringRows.length) return
 
+    try {
+      setIsExporting(true)
+      beginRequest('Exporting Excel...')
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Production Database')
     const firstHourColumn = 10
@@ -726,61 +806,32 @@ function App() {
     link.download = `lineops-production-database-${Date.now()}.xlsx`
     link.click()
     URL.revokeObjectURL(url)
+      showSuccess('Excel file downloaded.', 'Export complete')
+    } catch (error) {
+      showError(error.message || 'Could not export Excel.', 'Export failed')
+    } finally {
+      setIsExporting(false)
+      endRequest()
+    }
   }
 
   const exportReportPdf = async () => {
-    const pdfDoc = await PDFDocument.create()
-    let page = pdfDoc.addPage([842, 595])
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
-    
-    page.drawText('Production Monitoring Report', {
-      x: 30,
-      y: 560,
-      size: 18,
-      font: boldFont,
-      color: rgb(0.1, 0.1, 0.1),
-    })
-
-    page.drawText(`${reportSheetTitle} | Generated: ${new Date().toLocaleDateString()}`, {
-      x: 30,
-      y: 540,
-      size: 10,
-      font,
-      color: rgb(0.4, 0.4, 0.4),
-    })
-
-    let y = 520
-    const lineHeight = 14
-    const marginBottom = 20
-
-    monitoringRows.slice(0, 40).forEach((row) => {
-      if (y < marginBottom) {
-        page = pdfDoc.addPage([842, 595])
-        y = 570
-      }
-
-      page.drawText(
-        `${row.date} | ${row.line} | ${row.machine} | ${row.operator} | Tgt: ${row.target} | Prod: ${row.total} | Eff: ${row.efficiency}`,
-        {
-          x: 30,
-          y,
-          size: 9,
-          font,
-          color: rgb(0.2, 0.2, 0.2),
-        },
-      )
-      y -= lineHeight
-    })
-
-    const bytes = await pdfDoc.save()
-    const blob = new Blob([bytes], { type: 'application/pdf' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `lineops-report-${Date.now()}.pdf`
-    link.click()
-    URL.revokeObjectURL(url)
+    if (!monitoringRows.length) return
+    try {
+      setIsExporting(true)
+      beginRequest('Exporting PDF...')
+      await downloadMonitoringPdf({
+        rows: monitoringRows,
+        reportTitle: reportSheetTitle,
+        brandTitle: APP_BRAND.full,
+      })
+      showSuccess(`PDF exported (${monitoringRows.length} rows).`, 'Export complete')
+    } catch (error) {
+      showError(error.message || 'Could not export PDF.', 'Export failed')
+    } finally {
+      setIsExporting(false)
+      endRequest()
+    }
   }
 
   const addUser = addUserForm.handleSubmit(async (values) => {
@@ -799,9 +850,9 @@ function App() {
         status: 'active',
       })
       await loadUsers()
-      setStatusText('User created.')
+      showSuccess('User created successfully.')
     } catch (error) {
-      setErrorText(error.message)
+      showError(error.message)
     }
   })
 
@@ -813,7 +864,7 @@ function App() {
       })
       await loadUsers()
     } catch (error) {
-      setErrorText(error.message)
+      showError(error.message)
     }
   }
 
@@ -826,15 +877,15 @@ function App() {
         method: 'POST',
         body: JSON.stringify({ password }),
       })
-      setStatusText('Password reset complete.')
+      showSuccess('Password reset complete.')
     } catch (error) {
-      setErrorText(error.message)
+      showError(error.message)
     }
   }
 
   const saveMasterItem = async () => {
     if (!masterForm.name.trim()) {
-      setErrorText('Master item name is required.')
+      showError('Master item name is required.', 'Validation error')
       return
     }
 
@@ -851,9 +902,9 @@ function App() {
       })
       setMasterForm((prev) => ({ ...prev, name: '', code: '' }))
       await loadMasters()
-      setStatusText('Master item saved.')
+      showSuccess('Master item saved.')
     } catch (error) {
-      setErrorText(error.message)
+      showError(error.message)
     }
   }
 
@@ -865,7 +916,7 @@ function App() {
       })
       await loadMasters()
     } catch (error) {
-      setErrorText(error.message)
+      showError(error.message)
     }
   }
 
@@ -874,7 +925,7 @@ function App() {
       await authFetch(`/api/master/${kind}/${id}`, { method: 'DELETE' })
       await loadMasters()
     } catch (error) {
-      setErrorText(error.message)
+      showError(error.message)
     }
   }
 
@@ -909,9 +960,9 @@ function App() {
         body: JSON.stringify({ rows }),
       })
       await loadMasters()
-      setStatusText(`Imported ${rows.length} master rows.`)
+      showSuccess(`Imported ${rows.length} master rows.`, 'Import complete')
     } catch (error) {
-      setErrorText(error.message)
+      showError(error.message)
     }
   }
 
@@ -941,25 +992,45 @@ function App() {
 
   const canUseAdmin = user?.role === 'admin'
   const canUseSupervisorViews = ['admin', 'supervisor'].includes(user?.role || '')
-  const loadingBar = isLoading ? (
-    <div className="pointer-events-none fixed inset-x-0 top-0" style={{ zIndex: 60 }}>
-      <div className="loading-rail h-1 overflow-hidden bg-slate-200/90 dark:bg-slate-800/90">
-        <div className="loading-rail__bar h-full w-full" />
-      </div>
-      <div className="flex justify-end px-4 pt-2 sm:px-6">
-        <div className="loading-pill">{loadingMessage || 'Working...'}</div>
-      </div>
-    </div>
-  ) : null
+  const isOperator = user?.role === 'operator'
+
+  const startNewEntry = () => {
+    setEditingEntryId(null)
+    setEntryDraft({ ...emptyEntry(), date: todayDateString() })
+    
+    
+  }
+
+  useEffect(() => {
+    if (!user || editingEntryId) return
+    if (isOperator && !entryDraft.date) {
+      setEntryDraft((prev) => ({ ...prev, date: todayDateString() }))
+    }
+  }, [user, editingEntryId, isOperator, entryDraft.date])
+  const appChrome = (
+    <>
+      <GlobalLoader active={isBusy} message={busyMessage} />
+      <ErrorDialog
+        message={errorDialog?.message}
+        onClose={dismissError}
+        open={Boolean(errorDialog)}
+        title={errorDialog?.title}
+      />
+      <ToastStack onDismiss={removeToast} toasts={toasts} />
+    </>
+  )
 
   if (!token || !user) {
     return (
       <>
-        {loadingBar}
+        {appChrome}
         <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4 dark:bg-slate-900">
           <div className="card w-full max-w-md space-y-4">
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Smart Production Monitoring System</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-300">Sign in with your assigned credentials.</p>
+            <div>
+              <h1 className="text-xl font-bold text-[#001e40] dark:text-blue-200">{APP_BRAND.short}</h1>
+              <p className="text-sm text-slate-600 dark:text-slate-300">{APP_BRAND.tagline}</p>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Sign in with your assigned credentials.</p>
             <form className="space-y-3" onSubmit={handleLogin}>
               <div>
                 <label className="mb-1 block text-sm font-medium">Username</label>
@@ -975,12 +1046,10 @@ function App() {
                   <p className="mt-1 text-xs text-rose-600">{loginForm.formState.errors.password.message}</p>
                 ) : null}
               </div>
-              <button className="btn-primary w-full" disabled={isLoading} type="submit">
-                {isLoading ? 'Signing In...' : 'Sign In'}
+              <button className="btn-primary w-full" disabled={isBusy} type="submit">
+                {isBusy ? 'Signing In...' : 'Sign In'}
               </button>
             </form>
-            {statusText ? <p className="text-xs text-emerald-600">{statusText}</p> : null}
-            {errorText ? <p className="text-xs text-rose-600">{errorText}</p> : null}
           </div>
         </div>
       </>
@@ -993,18 +1062,17 @@ function App() {
     { id: 'reports', label: 'Reports', icon: 'insert_chart' },
     ...(canUseAdmin ? [
       { id: 'users', label: 'Users', icon: 'group' },
-      { id: 'master', label: 'Admin Control', icon: 'settings' },
+      { id: 'master', label: 'Configuration', icon: 'tune' },
     ] : []),
-    ...(canUseSupervisorViews ? [{ id: 'audit', label: 'Audit Logs', icon: 'history' }] : []),
   ]
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-[#191c1d] dark:bg-slate-950 dark:text-slate-100 md:flex">
-      {loadingBar}
+      {appChrome}
       <aside className="hidden w-72 shrink-0 border-r border-[#c3c6d1] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950 md:flex md:min-h-screen md:flex-col">
         <div className="border-b border-[#c3c6d1] px-6 py-7 dark:border-slate-800">
-          <div className="text-2xl font-black text-[#001e40] dark:text-blue-200">STITCH<span className="text-[#3a5f94]">OPS</span></div>
-          <p className="mt-1 text-xs font-semibold uppercase text-[#43474f] dark:text-slate-400">Manufacturing Data Hub</p>
+          <div className="text-xl font-black leading-tight text-[#001e40] dark:text-blue-200">{APP_BRAND.short}</div>
+          <p className="mt-1 text-xs font-medium text-[#43474f] dark:text-slate-400">{APP_BRAND.tagline}</p>
         </div>
         <nav className="flex flex-1 flex-col gap-2 p-4">
           {navigationTabs.map((tab) => (
@@ -1045,8 +1113,13 @@ function App() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-40 border-b border-[#c3c6d1] bg-white/95 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/90 md:hidden">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-lg font-black text-[#001e40] dark:text-blue-200">STITCHOPS</div>
-            <button className="btn-muted" onClick={handleLogout} type="button">Logout</button>
+            <div className="text-sm font-bold text-[#001e40] dark:text-blue-200">{APP_BRAND.short}</div>
+            <div className="flex gap-2">
+              <button className="btn-muted" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} type="button">
+                {theme === 'light' ? 'Dark' : 'Light'}
+              </button>
+              <button className="btn-muted" onClick={handleLogout} type="button">Logout</button>
+            </div>
           </div>
           <div className="mt-3 flex gap-2 overflow-x-auto">
             {navigationTabs.map((tab) => (
@@ -1063,25 +1136,30 @@ function App() {
         </header>
 
       <main className="grid min-w-0 w-full max-w-full gap-4 overflow-x-hidden p-4 md:p-8">
-        {statusText ? <div className="card text-sm text-emerald-600">{statusText}</div> : null}
-        {errorText ? <div className="card text-sm text-rose-600">{errorText}</div> : null}
+        {isBootstrapping ? <SectionLoader label="Loading dashboard data..." /> : null}
 
-        {activeTab === 'dashboard' ? (
+        {activeTab === 'dashboard' && !isBootstrapping ? (
           <section className="grid gap-4 md:grid-cols-3">
             <div className="card">
-              <h2 className="text-sm font-semibold uppercase text-slate-500">Entries</h2>
+              <h2 className="text-sm font-semibold uppercase text-slate-500">{isOperator ? 'My Entries' : 'Entries'}</h2>
               <p className="mt-2 text-3xl font-bold">{entries.length}</p>
-              <p className="mt-1 text-xs text-slate-500">Total records visible to your role</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {isOperator ? 'Production records you have submitted' : 'Total records visible to your role'}
+              </p>
             </div>
             <div className="card">
               <h2 className="text-sm font-semibold uppercase text-slate-500">Masters</h2>
               <p className="mt-2 text-3xl font-bold">{masterKinds.reduce((sum, kind) => sum + (masters[kind]?.length || 0), 0)}</p>
-              <p className="mt-1 text-xs text-slate-500">Dropdown options configured</p>
+              <p className="mt-1 text-xs text-slate-500">Lines, machines, and processes available</p>
             </div>
             <div className="card">
-              <h2 className="text-sm font-semibold uppercase text-slate-500">Users</h2>
-              <p className="mt-2 text-3xl font-bold">{canUseAdmin ? users.length : 'Restricted'}</p>
-              <p className="mt-1 text-xs text-slate-500">Role-based user count</p>
+              <h2 className="text-sm font-semibold uppercase text-slate-500">{canUseAdmin ? 'Users' : 'Today'}</h2>
+              <p className="mt-2 text-3xl font-bold">
+                {canUseAdmin ? users.length : entries.filter((row) => row.date === todayDateString()).length}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {canUseAdmin ? 'Registered accounts' : "Today's production entries"}
+              </p>
             </div>
 
             {canUseSupervisorViews ? (
@@ -1224,16 +1302,25 @@ function App() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <button className="btn-primary" disabled={isSavingEntry} onClick={() => saveEntry()} type="button">
-                  {isSavingEntry ? 'Saving...' : 'Save'}
+                <button className="btn-primary" disabled={isSavingEntry || isBusy} onClick={() => saveEntry()} type="button">
+                  {isSavingEntry ? 'Saving...' : editingEntryId ? 'Update Entry' : 'Save Entry'}
                 </button>
+                {editingEntryId ? (
+                  <button className="btn-muted" onClick={startNewEntry} type="button">
+                    New Entry
+                  </button>
+                ) : null}
               </div>
             </div>
 
             <div className="card">
               <h2 className="mb-2 text-base font-semibold">Saved Entries</h2>
               <p className="mb-3 text-sm text-slate-500">
-                Click Edit to load an entry into the form above, change values, then Save to update.
+                {isOperator
+                  ? 'Edit loads today’s entry into the form. Locked or older entries cannot be changed.'
+                  : canUseAdmin
+                    ? 'Edit entries below, or lock a record to prevent operators from changing it.'
+                    : 'Click Edit to load an entry into the form above, change values, then save.'}
               </p>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
@@ -1261,10 +1348,11 @@ function App() {
                       entries.map((row) => {
                         const isLocked = row.status === 'locked'
                         const isEditing = editingEntryId === row._id
+                        const canEdit = canEditEntryRow(row)
                         const total = (row.hourlyInputs || []).reduce((sum, value) => sum + Number(value || 0), 0)
                         return (
                           <tr
-                            className={`${isLocked ? 'bg-slate-100 dark:bg-slate-900' : ''} ${isEditing ? 'ring-2 ring-amber-400 ring-inset' : ''}`}
+                            className={`${isLocked ? 'bg-slate-50 dark:bg-slate-900/60' : ''} ${isEditing ? 'ring-2 ring-amber-400 ring-inset' : ''}`}
                             key={row._id}
                           >
                             <BodyCell>{row.date}</BodyCell>
@@ -1281,19 +1369,36 @@ function App() {
                               </span>
                             </BodyCell>
                             <BodyCell>
-                              <span className="inline-flex items-center gap-1 capitalize">
-                                {row.status === 'locked' ? '🔒' : row.status === 'draft' ? '📝' : '✅'} {row.status}
-                              </span>
+                              {isLocked ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                                  Locked
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+                                  Open
+                                </span>
+                              )}
                             </BodyCell>
                             <BodyCell>
-                              <button
-                                className="btn-muted"
-                                disabled={isLocked}
-                                onClick={() => loadEntryForEdit(row)}
-                                type="button"
-                              >
-                                Edit
-                              </button>
+                              <div className="flex flex-wrap gap-1">
+                                {canEdit ? (
+                                  <button className="btn-muted" onClick={() => loadEntryForEdit(row)} type="button">
+                                    Edit
+                                  </button>
+                                ) : null}
+                                {canUseAdmin ? (
+                                  <button
+                                    className={isLocked ? 'btn-muted' : 'btn-primary'}
+                                    onClick={() => toggleEntryLock(row)}
+                                    type="button"
+                                  >
+                                    {isLocked ? 'Unlock' : 'Lock'}
+                                  </button>
+                                ) : null}
+                                {!canEdit && !canUseAdmin ? (
+                                  <span className="text-slate-400">—</span>
+                                ) : null}
+                              </div>
                             </BodyCell>
                           </tr>
                         )
@@ -1364,16 +1469,18 @@ function App() {
                   options={filteredReportMachines}
                   value={reportFilters.machineId}
                 />
-                <div>
-                  <label className="mb-1 block text-xs font-semibold">Operator Name</label>
-                  <input
-                    className="input"
-                    onChange={(e) => changeReportFilter('operatorName', e.target.value)}
-                    placeholder="Search operator name"
-                    type="text"
-                    value={reportFilters.operatorName}
-                  />
-                </div>
+                {!isOperator ? (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold">Operator Name</label>
+                    <input
+                      className="input"
+                      onChange={(e) => changeReportFilter('operatorName', e.target.value)}
+                      placeholder="Search operator name"
+                      type="text"
+                      value={reportFilters.operatorName}
+                    />
+                  </div>
+                ) : null}
                 <SelectField
                   emptyLabel="All processes"
                   includeUnspecified={false}
@@ -1392,13 +1499,13 @@ function App() {
                 />
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button className="btn-primary" onClick={runReport} type="button">
+                <button className="btn-primary" disabled={isBusy} onClick={runReport} type="button">
                   Apply Filters
                 </button>
-                <button className="btn-muted" disabled={!monitoringRows.length} onClick={exportReportExcel} type="button">
+                <button className="btn-muted" disabled={!monitoringRows.length || isBusy} onClick={exportReportExcel} type="button">
                   Export Excel
                 </button>
-                <button className="btn-muted" disabled={!monitoringRows.length} onClick={exportReportPdf} type="button">
+                <button className="btn-muted" disabled={!monitoringRows.length || isBusy} onClick={exportReportPdf} type="button">
                   Export PDF
                 </button>
               </div>
@@ -1411,13 +1518,15 @@ function App() {
                 </h3>
                 <span className="text-xs text-slate-500">{reportSheetTitle}</span>
               </div>
-              {reportHasRun && monitoringRows.length > 0 ? (
+              {isLoading && activeTab === 'reports' && !reportHasRun ? (
+                <SectionLoader label="Loading production database..." />
+              ) : reportHasRun && monitoringRows.length > 0 ? (
                 <ExcelSheet includeDate rows={monitoringRows} title={reportSheetTitle} />
               ) : (
-                <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">
                   {reportHasRun
                     ? 'No entries match the selected filters.'
-                    : 'Loading production database...'}
+                    : 'Apply filters or open this tab to load the production database.'}
                 </div>
               )}
             </div>
@@ -1499,21 +1608,29 @@ function App() {
             <div className="card">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-semibold">Master Data Management</h2>
-                  <p className="mt-1 text-xs text-slate-500">{masterTypeConfig[masterForm.kind]?.description}</p>
+                  <h2 className="text-base font-semibold">Configuration</h2>
+                  <p className="mt-1 text-sm text-slate-500">Manage dropdown values for production entry and reports.</p>
                 </div>
-                <select
-                  className="select w-40"
-                  onChange={(e) => setMasterForm((prev) => ({ ...prev, kind: e.target.value, name: '', code: '', lineId: '', machineId: '' }))}
-                  value={masterForm.kind}
-                >
-                  {masterKinds.map((kind) => (
-                    <option key={kind} value={kind}>{masterTypeConfig[kind]?.label || kind}</option>
-                  ))}
-                </select>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="mt-4 flex flex-wrap gap-2">
+                {masterKinds.map((kind) => (
+                  <button
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                      masterForm.kind === kind
+                        ? 'bg-[#001e40] text-white'
+                        : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
+                    }`}
+                    key={kind}
+                    onClick={() => setMasterForm((prev) => ({ ...prev, kind, name: '', code: '', lineId: '', machineId: '' }))}
+                    type="button"
+                  >
+                    {masterTypeConfig[kind]?.label || kind}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
                 {masterTypeConfig[masterForm.kind]?.fields.includes('name') ? (
                   <div>
                     <label className="mb-1 block text-xs font-semibold">{masterTypeConfig[masterForm.kind]?.displayFields?.name || 'Name'} *</label>
@@ -1600,7 +1717,7 @@ function App() {
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                <button className="btn-primary" onClick={saveMasterItem} type="button">Add Master Item</button>
+                <button className="btn-primary" onClick={saveMasterItem} type="button">Add {masterTypeConfig[masterForm.kind]?.label || 'Item'}</button>
                 <label className="btn-muted cursor-pointer">
                   Import Master Excel
                   <input className="hidden" onChange={importMasterExcel} type="file" />
@@ -1655,35 +1772,6 @@ function App() {
           </section>
         ) : null}
 
-        {activeTab === 'audit' && canUseSupervisorViews ? (
-          <section className="card overflow-x-auto">
-            <h2 className="mb-3 text-base font-semibold">Edit Audit Log</h2>
-            <table className="min-w-full text-xs">
-              <thead>
-                <tr className="bg-slate-200 dark:bg-slate-800">
-                  <HeaderCell text="Time" />
-                  <HeaderCell text="Action" />
-                  <HeaderCell text="Entity" />
-                  <HeaderCell text="Entity ID" />
-                  <HeaderCell text="Metadata" />
-                </tr>
-              </thead>
-              <tbody>
-                {auditLogs.map((log) => (
-                  <tr key={log._id}>
-                    <BodyCell>{new Date(log.createdAt).toLocaleString()}</BodyCell>
-                    <BodyCell>{log.action}</BodyCell>
-                    <BodyCell>{log.entity}</BodyCell>
-                    <BodyCell>{log.entityId}</BodyCell>
-                    <BodyCell>
-                      <code>{JSON.stringify(log.metadata)}</code>
-                    </BodyCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        ) : null}
       </main>
       </div>
     </div>
@@ -1691,38 +1779,31 @@ function App() {
 }
 
 function ExcelSheet({ rows, includeDate = false, title }) {
-  const leadingColumns = includeDate
-    ? [
-        monitoringColumns[0],
-        { key: 'date', label: 'Date', width: 12 },
-        ...monitoringColumns.slice(1, 8),
-      ]
-    : monitoringColumns.slice(0, 8)
-  const trailingColumns = monitoringColumns.slice(21)
+  const leadingColumns = getLeadingColumns(includeDate)
 
   return (
-    <div className={`monitoring-sheet ${includeDate ? 'db-excel-sheet' : ''} overflow-auto`}>
+    <div className={`monitoring-sheet overflow-auto ${includeDate ? 'db-excel-sheet has-date-col' : ''}`}>
       <table>
         <thead>
-          <tr>
+          <tr className="sheet-header-row">
             {leadingColumns.map((column) => (
               <th className={column.vertical ? 'vertical-head' : ''} key={column.key} rowSpan={2}>
                 {column.label}
               </th>
             ))}
             <th className="actual-head" colSpan={monitoringHourCount + 1}>
-              {title}
+              {title || 'Hourly Production'}
             </th>
-            {trailingColumns.map((column) => (
+            {TRAILING_COLUMNS.map((column) => (
               <th className={column.vertical ? 'vertical-head' : ''} key={column.key} rowSpan={2}>
                 {column.label}
               </th>
             ))}
           </tr>
-          <tr>
-            {Array.from({ length: monitoringHourCount }, (_, index) => (
-              <th className="hour-head" key={`hour-head-${index + 1}`}>
-                {index + 1}
+          <tr className="sheet-hour-row">
+            {HOUR_COLUMNS.map((column) => (
+              <th className="hour-head" key={column.key}>
+                {column.label}
               </th>
             ))}
             <th className="hour-head">T</th>
@@ -1759,7 +1840,11 @@ function ExcelSheet({ rows, includeDate = false, title }) {
 }
 
 function HeaderCell({ text }) {
-  return <th className="border-b border-slate-300 p-2 text-left font-semibold dark:border-slate-700">{text}</th>
+  return (
+    <th className="whitespace-nowrap border-b border-slate-300 bg-slate-200 px-2 py-2 text-left text-xs font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+      {text}
+    </th>
+  )
 }
 
 function BodyCell({ children, className = '' }) {

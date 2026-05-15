@@ -208,7 +208,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'supervisor', 'operator'
   return res.json(entry);
 });
 
-router.post('/:id/lock', authMiddleware, requireRole('admin', 'supervisor'), async (req, res) => {
+router.post('/:id/lock', authMiddleware, requireRole('admin'), async (req, res) => {
   if (!isValidObjectId(req.params.id)) {
     return res.status(400).json({ error: 'Invalid entry id.' });
   }
