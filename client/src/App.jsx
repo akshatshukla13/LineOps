@@ -32,7 +32,6 @@ const masterKinds = [
   'machine',
   'process',
   'operator',
-  'defectType',
 ]
 
 const masterTypeConfig = {
@@ -90,17 +89,6 @@ const masterTypeConfig = {
     description: 'Factory operators',
     color: 'cyan',
     icon: '👤',
-  },
-  defectType: {
-    label: 'Defect Type',
-    fields: ['name', 'code'],
-    displayFields: { name: 'Defect Type Name', code: 'Type Code' },
-    tableColumns: ['name', 'code', 'active'],
-    columnLabels: { name: 'Type', code: 'Code', active: 'Status' },
-    parent: null,
-    description: 'Types of product defects (Critical, Major, Minor)',
-    color: 'red',
-    icon: '❌',
   },
 }
 

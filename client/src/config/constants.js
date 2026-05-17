@@ -13,7 +13,6 @@ export const MASTER_KINDS = [
   'machine',
   'process',
   'operator',
-  'defectType',
 ];
 
 export const REPORT_TYPES = [

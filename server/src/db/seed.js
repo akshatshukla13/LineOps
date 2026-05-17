@@ -36,9 +36,6 @@ export const seedInitialData = async () => {
     { kind: 'shift', name: 'Morning', code: 'SH-M' },
     { kind: 'shift', name: 'Evening', code: 'SH-E' },
     { kind: 'shift', name: 'Night', code: 'SH-N' },
-    { kind: 'defectType', name: 'Critical', code: 'DEF-CRIT' },
-    { kind: 'defectType', name: 'Major', code: 'DEF-MAJ' },
-    { kind: 'defectType', name: 'Minor', code: 'DEF-MIN' },
   ];
 
   for (const item of defaults) {
