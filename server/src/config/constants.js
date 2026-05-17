@@ -12,7 +12,6 @@ export const MASTER_KINDS = [
   'machine',
   'process',
   'operator',
-  'defectType',
 ];
 
 export const MASTER_KIND_SET = new Set(MASTER_KINDS);

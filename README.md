@@ -31,7 +31,6 @@ Admin can manage dropdown masters:
 - Processes
 - Operators
 - Products
-- Defect Types
 - Downtime Reasons
 
 Actions:

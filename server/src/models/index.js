@@ -36,7 +36,7 @@ masterItemSchema.index(
   { kind: 1, name: 1 },
   {
     unique: true,
-    partialFilterExpression: { kind: { $in: ['shift', 'line', 'operator', 'defectType'] } },
+    partialFilterExpression: { kind: { $in: ['shift', 'line', 'operator'] } },
   },
 );
 masterItemSchema.index(
