@@ -16,8 +16,8 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 const APP_BRAND = {
   short: 'Dewas_HydroQuip',
-  tagline: 'Manufacturing Data Hub',
-  full: 'Dewas_HydroQuip Manufacturing Data Hub',
+  tagline: 'Manufacturing Data Software',
+  full: 'Dewas_HydroQuip Manufacturing Data Software',
 }
 
 const todayDateString = () => new Date().toISOString().slice(0, 10)

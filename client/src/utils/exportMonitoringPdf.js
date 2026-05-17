@@ -216,7 +216,7 @@ export async function exportMonitoringPdf({ rows, reportTitle, brandTitle }) {
   })
 
   const meta = {
-    brandTitle: brandTitle || 'Manufacturing Data Hub',
+    brandTitle: brandTitle || 'Manufacturing Data Software',
     reportTitle: reportTitle || 'Production Monitoring Report',
     generatedAt,
     rowCount: rows.length,
