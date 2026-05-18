@@ -28,6 +28,7 @@ const toMonitoringExportRow = (entry, index) => {
   const total = entry.totalProduction ?? hourlyInputs.reduce((sum, value) => sum + Number(value || 0), 0);
 
   return {
+    id: String(entry._id),
     sno: index + 1,
     date: formatDisplayDate(entry.date),
     line: entry.sheetLineNo || entry.lineId?.code || entry.lineId?.name?.replace(/\D+/g, '') || getMasterLabel(entry.lineId, '-'),

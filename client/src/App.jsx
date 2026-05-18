@@ -16,8 +16,8 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 const APP_BRAND = {
   short: 'Dewas_HydroQuip',
-  tagline: 'Manufacturing Data Hub',
-  full: 'Dewas_HydroQuip Manufacturing Data Hub',
+  tagline: 'Manufacturing Data Software',
+  full: 'Dewas_HydroQuip Manufacturing Data Software',
 }
 
 const todayDateString = () => new Date().toISOString().slice(0, 10)
@@ -148,6 +148,7 @@ const toMonitoringRow = (row, index) => {
   const hourlyInputs = [...(row.hourlyInputs || []), ...Array(monitoringHourCount).fill('')].slice(0, monitoringHourCount)
   const total = row.totalProduction ?? hourlyInputs.reduce((sum, value) => sum + Number(value || 0), 0)
   return {
+    id: row._id || row.id || '',
     sno: index + 1,
     date: formatDisplayDate(row.date),
     line: row.sheetLineNo || row.lineId?.code || row.lineId?.name?.replace(/\D+/g, '') || getMasterLabel(row.lineId, '-'),
@@ -285,6 +286,7 @@ function App() {
   })
   const [reportSpreadsheetRows, setReportSpreadsheetRows] = useState([])
   const [reportHasRun, setReportHasRun] = useState(false)
+  const [quickReport, setQuickReport] = useState(null)
   const [missedEntries, setMissedEntries] = useState([])
   const [isSavingEntry, setIsSavingEntry] = useState(false)
   const [isBootstrapping, setIsBootstrapping] = useState(false)
@@ -299,6 +301,7 @@ function App() {
     lineId: '',
     machineId: '',
   })
+  const [editingMasterId, setEditingMasterId] = useState(null)
   const [masterSearch, setMasterSearch] = useState('')
   const loadingResetRef = useRef(null)
 
@@ -318,6 +321,7 @@ function App() {
       status: 'active',
     },
   })
+  const addUserRole = addUserForm.watch('role')
 
 
   const isLoading = requestCount > 0
@@ -347,6 +351,12 @@ function App() {
       }
     }
   }, [requestCount])
+
+  useEffect(() => {
+    if (addUserRole === 'admin') {
+      addUserForm.setValue('status', 'active')
+    }
+  }, [addUserForm, addUserRole])
 
   const beginRequest = useCallback((message) => {
     setRequestCount((count) => count + 1)
@@ -400,16 +410,15 @@ function App() {
     return parent ? `${parent.name} (${parent.code || 'N/A'})` : '-'
   }
 
-  const selectedMasterRows = optionsByKind(masterForm.kind)
-
   const filteredMasterRows = useMemo(() => {
+    const selectedMasterRows = masters[masterForm.kind] || []
     if (!masterSearch.trim()) return selectedMasterRows
     const search = masterSearch.toLowerCase()
     return selectedMasterRows.filter((item) =>
       (item.name?.toLowerCase().includes(search) ||
       item.code?.toLowerCase().includes(search))
     )
-  }, [selectedMasterRows, masterSearch])
+  }, [masters, masterForm.kind, masterSearch])
 
   const filteredMachines = useMemo(() => {
     const machines = masters.machine || []
@@ -461,6 +470,26 @@ function App() {
     () => reportSpreadsheetRows.map((row, index) => normalizeMonitoringRow(row, index)),
     [reportSpreadsheetRows],
   )
+
+  const quickReportRows = useMemo(
+    () => (quickReport?.rows || []).map((row, index) => normalizeMonitoringRow(row, index)),
+    [quickReport],
+  )
+
+  const quickReportSummary = useMemo(() => {
+    const rows = quickReportRows
+    const target = rows.reduce((sum, row) => sum + Number(row.target || 0), 0)
+    const total = rows.reduce((sum, row) => sum + Number(row.total || 0), 0)
+    const downtime = rows.reduce((sum, row) => sum + Number(row.downtime || 0), 0)
+    const efficiencyValues = rows
+      .map((row) => Number(String(row.efficiency || '0').replace('%', '')))
+      .filter((value) => Number.isFinite(value))
+    const efficiency = efficiencyValues.length
+      ? Math.round(efficiencyValues.reduce((sum, value) => sum + value, 0) / efficiencyValues.length)
+      : 0
+
+    return { target, total, downtime, efficiency }
+  }, [quickReportRows])
 
   const reportSheetTitle = useMemo(() => {
     if (reportFilters.dateMode === 'all') return 'Production Database — All Dates'
@@ -627,6 +656,34 @@ function App() {
     }
   }
 
+  const deleteEntry = async (entry) => {
+    if (!canUseAdmin) return
+    const entryId = entry._id || entry.id
+    if (!entryId) {
+      showError('Could not find entry id for delete.')
+      return
+    }
+
+    const confirmed = window.confirm(`Delete entry for ${entry.date || 'this row'}? This cannot be undone.`)
+    if (!confirmed) return
+
+    try {
+      await authFetch(`/api/entries/${entryId}`, { method: 'DELETE' })
+      if (editingEntryId === entryId) {
+        setEditingEntryId(null)
+        setEntryDraft(emptyEntry())
+      }
+      setReportSpreadsheetRows((rows) => rows.filter((row) => String(row.id || row._id || '') !== String(entryId)))
+      setQuickReport((current) => current
+        ? { ...current, rows: current.rows.filter((row) => String(row.id || row._id || '') !== String(entryId)) }
+        : current)
+      await loadEntries()
+      showSuccess('Entry deleted.')
+    } catch (error) {
+      showError(error.message)
+    }
+  }
+
   const loadEntryForEdit = (entry) => {
     if (!canEditEntryRow(entry)) {
       showError(
@@ -725,8 +782,10 @@ function App() {
     }
   }
 
-  const exportReportExcel = async () => {
-    if (!monitoringRows.length) return
+  const exportReportExcel = async (rowsOverride, titleOverride) => {
+    const rowsToExport = Array.isArray(rowsOverride) ? rowsOverride : monitoringRows
+    const titleToExport = typeof titleOverride === 'string' ? titleOverride : reportSheetTitle
+    if (!rowsToExport.length) return
 
     try {
       setIsExporting(true)
@@ -742,7 +801,7 @@ function App() {
       ...monitoringColumns.slice(1).map((column) => ({ key: column.key, width: column.width })),
     ]
     worksheet.mergeCells(1, firstHourColumn, 1, totalColumn)
-    worksheet.getCell(1, firstHourColumn).value = reportSheetTitle
+    worksheet.getCell(1, firstHourColumn).value = titleToExport
 
     const headerLabels = ['S.No.', 'Date', ...monitoringColumns.slice(1).map((column) => column.label)]
     headerLabels.forEach((label, index) => {
@@ -761,7 +820,7 @@ function App() {
       }
     })
 
-    monitoringRows.forEach((row) => {
+    rowsToExport.forEach((row) => {
       worksheet.addRow([
         row.sno,
         row.date,
@@ -791,7 +850,7 @@ function App() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `lineops-production-database-${Date.now()}.xlsx`
+    link.download = `${titleToExport.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'lineops-report'}-${Date.now()}.xlsx`
     link.click()
     URL.revokeObjectURL(url)
       showSuccess('Excel file downloaded.', 'Export complete')
@@ -803,17 +862,19 @@ function App() {
     }
   }
 
-  const exportReportPdf = async () => {
-    if (!monitoringRows.length) return
+  const exportReportPdf = async (rowsOverride, titleOverride) => {
+    const rowsToExport = Array.isArray(rowsOverride) ? rowsOverride : monitoringRows
+    const titleToExport = typeof titleOverride === 'string' ? titleOverride : reportSheetTitle
+    if (!rowsToExport.length) return
     try {
       setIsExporting(true)
       beginRequest('Exporting PDF...')
       await downloadMonitoringPdf({
-        rows: monitoringRows,
-        reportTitle: reportSheetTitle,
+        rows: rowsToExport,
+        reportTitle: titleToExport,
         brandTitle: APP_BRAND.full,
       })
-      showSuccess(`PDF exported (${monitoringRows.length} rows).`, 'Export complete')
+      showSuccess(`PDF exported (${rowsToExport.length} rows).`, 'Export complete')
     } catch (error) {
       showError(error.message || 'Could not export PDF.', 'Export failed')
     } finally {
@@ -851,9 +912,90 @@ function App() {
         body: JSON.stringify({ status }),
       })
       await loadUsers()
+      showSuccess(`User ${status === 'active' ? 'enabled' : 'disabled'}.`)
     } catch (error) {
       showError(error.message)
     }
+  }
+
+  const openQuickReport = async (type) => {
+    const reportDate = todayDateString()
+    const query = new URLSearchParams()
+    query.set('type', 'monitoring')
+
+    if (type === 'today') {
+      query.set('dateMode', 'range')
+      query.set('from', reportDate)
+      query.set('to', reportDate)
+    } else {
+      query.set('dateMode', 'all')
+    }
+
+    const reportConfig = {
+      today: {
+        title: 'Today Production Report',
+        emptyText: 'No production entries found for today.',
+        prepareRows: (rows) => rows,
+      },
+      low: {
+        title: 'Low Efficiency Report',
+        emptyText: 'No low efficiency entries found.',
+        prepareRows: (rows) =>
+          rows
+            .filter((row) => Number(String(row.efficiency || '0').replace('%', '')) < 70)
+            .sort((a, b) => Number(String(a.efficiency || '0').replace('%', '')) - Number(String(b.efficiency || '0').replace('%', ''))),
+      },
+      downtime: {
+        title: 'Downtime Problem Report',
+        emptyText: 'No downtime entries found.',
+        prepareRows: (rows) =>
+          rows
+            .filter((row) => Number(row.downtime || 0) > 0)
+            .sort((a, b) => Number(b.downtime || 0) - Number(a.downtime || 0)),
+      },
+    }
+
+    const config = reportConfig[type]
+    if (!config) return
+
+    try {
+      const data = await authFetch(`/api/reports?${query.toString()}`)
+      const rows = config.prepareRows(data.spreadsheetRows || [])
+      setQuickReport({
+        type,
+        title: config.title,
+        emptyText: config.emptyText,
+        rows,
+        generatedAt: new Date().toLocaleString(),
+      })
+    } catch (error) {
+      showError(error.message, 'Report failed')
+    }
+  }
+
+  const resetMasterForm = (kind = masterForm.kind) => {
+    setEditingMasterId(null)
+    setMasterForm({
+      kind,
+      name: '',
+      code: '',
+      active: true,
+      lineId: '',
+      machineId: '',
+    })
+  }
+
+  const editMasterItem = (kind, item) => {
+    setEditingMasterId(item._id)
+    setMasterForm({
+      kind,
+      name: item.name || '',
+      code: item.code || '',
+      active: item.active !== false,
+      lineId: resolveMasterId(item.lineId),
+      machineId: resolveMasterId(item.machineId),
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const resetPassword = async (id) => {
@@ -878,8 +1020,12 @@ function App() {
     }
 
     try {
-      await authFetch(`/api/master/${masterForm.kind}`, {
-        method: 'POST',
+      const path = editingMasterId
+        ? `/api/master/${masterForm.kind}/${editingMasterId}`
+        : `/api/master/${masterForm.kind}`
+
+      await authFetch(path, {
+        method: editingMasterId ? 'PUT' : 'POST',
         body: JSON.stringify({
           name: masterForm.name.trim(),
           code: masterForm.code.trim(),
@@ -888,9 +1034,9 @@ function App() {
           machineId: masterForm.machineId || null,
         }),
       })
-      setMasterForm((prev) => ({ ...prev, name: '', code: '' }))
+      resetMasterForm(masterForm.kind)
       await loadMasters()
-      showSuccess('Master item saved.')
+      showSuccess(editingMasterId ? 'Configuration item updated.' : 'Configuration item added.')
     } catch (error) {
       showError(error.message)
     }
@@ -909,46 +1055,16 @@ function App() {
   }
 
   const deleteMasterItem = async (kind, id) => {
+    const confirmed = window.confirm(`Delete this ${masterTypeConfig[kind]?.label || 'configuration item'}? This cannot be undone.`)
+    if (!confirmed) return
+
     try {
       await authFetch(`/api/master/${kind}/${id}`, { method: 'DELETE' })
-      await loadMasters()
-    } catch (error) {
-      showError(error.message)
-    }
-  }
-
-  const importMasterExcel = async (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    try {
-      const workbook = new ExcelJS.Workbook()
-      const buffer = await file.arrayBuffer()
-      await workbook.xlsx.load(buffer)
-      const ws = workbook.worksheets[0]
-      const rows = []
-
-      ws.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return
-        const kind = String(row.getCell(1).value || '').trim()
-        const name = String(row.getCell(2).value || '').trim()
-        const code = String(row.getCell(3).value || '').trim()
-        const active = String(row.getCell(4).value || 'true').toLowerCase() !== 'false'
-        if (kind && name) {
-          rows.push({ kind, name, code, active })
-        }
-      })
-
-      if (!rows.length) {
-        throw new Error('No rows found in selected Excel file.')
+      if (editingMasterId === id) {
+        resetMasterForm(kind)
       }
-
-      await authFetch('/api/master/import', {
-        method: 'POST',
-        body: JSON.stringify({ rows }),
-      })
       await loadMasters()
-      showSuccess(`Imported ${rows.length} master rows.`, 'Import complete')
+      showSuccess('Configuration item deleted.')
     } catch (error) {
       showError(error.message)
     }
@@ -1057,12 +1173,12 @@ function App() {
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-[#191c1d] dark:bg-slate-950 dark:text-slate-100 md:flex">
       {appChrome}
-      <aside className="hidden w-72 shrink-0 border-r border-[#c3c6d1] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950 md:flex md:min-h-screen md:flex-col">
+      <aside className="hidden w-72 shrink-0 border-r border-[#c3c6d1] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950 md:fixed md:inset-y-0 md:left-0 md:flex md:flex-col">
         <div className="border-b border-[#c3c6d1] px-6 py-7 dark:border-slate-800">
           <div className="text-xl font-black leading-tight text-[#001e40] dark:text-blue-200">{APP_BRAND.short}</div>
           <p className="mt-1 text-xs font-medium text-[#43474f] dark:text-slate-400">{APP_BRAND.tagline}</p>
         </div>
-        <nav className="flex flex-1 flex-col gap-2 p-4">
+        <nav className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
           {navigationTabs.map((tab) => (
             <button
               className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-semibold transition ${
@@ -1079,7 +1195,7 @@ function App() {
             </button>
           ))}
         </nav>
-        <div className="border-t border-[#c3c6d1] p-4 dark:border-slate-800">
+        <div className="shrink-0 border-t border-[#c3c6d1] bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#003366] text-sm font-bold text-white">
               {user.fullName?.slice(0, 2).toUpperCase() || 'OP'}
@@ -1098,7 +1214,7 @@ function App() {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col md:ml-72">
         <header className="sticky top-0 z-40 border-b border-[#c3c6d1] bg-white/95 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/90 md:hidden">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-bold text-[#001e40] dark:text-blue-200">{APP_BRAND.short}</div>
@@ -1127,31 +1243,77 @@ function App() {
         {isBootstrapping ? <SectionLoader label="Loading dashboard data..." /> : null}
 
         {activeTab === 'dashboard' && !isBootstrapping ? (
-          <section className="grid gap-4 md:grid-cols-3">
+          <section className="grid gap-4">
             <div className="card">
-              <h2 className="text-sm font-semibold uppercase text-slate-500">{isOperator ? 'My Entries' : 'Entries'}</h2>
-              <p className="mt-2 text-3xl font-bold">{entries.length}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {isOperator ? 'Production records you have submitted' : 'Total records visible to your role'}
-              </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h1 className="text-xl font-bold text-[#001e40] dark:text-blue-100">Fast Reports</h1>
+                  <p className="mt-1 max-w-2xl text-sm font-medium text-slate-600 dark:text-slate-400">
+                    Large buttons for common factory reports. Click once, check the preview, then download PDF or Excel.
+                  </p>
+                </div>
+                <button className="btn-muted" onClick={() => setActiveTab('entry')} type="button">
+                  Add Entry
+                </button>
+              </div>
             </div>
-            <div className="card">
-              <h2 className="text-sm font-semibold uppercase text-slate-500">Masters</h2>
-              <p className="mt-2 text-3xl font-bold">{masterKinds.reduce((sum, kind) => sum + (masters[kind]?.length || 0), 0)}</p>
-              <p className="mt-1 text-xs text-slate-500">Lines, machines, and processes available</p>
+
+            <div className="grid gap-3 lg:grid-cols-3">
+              <button
+                className="dashboard-report-button"
+                disabled={isBusy}
+                onClick={() => openQuickReport('today')}
+                type="button"
+              >
+                <span className="text-lg font-bold">Today Production</span>
+                <span className="mt-2 text-sm">Target, actual, efficiency, downtime</span>
+              </button>
+              <button
+                className="dashboard-report-button"
+                disabled={isBusy}
+                onClick={() => openQuickReport('low')}
+                type="button"
+              >
+                <span className="text-lg font-bold">Low Efficiency</span>
+                <span className="mt-2 text-sm">Rows below 70%, worst first</span>
+              </button>
+              <button
+                className="dashboard-report-button"
+                disabled={isBusy}
+                onClick={() => openQuickReport('downtime')}
+                type="button"
+              >
+                <span className="text-lg font-bold">Downtime Problems</span>
+                <span className="mt-2 text-sm">Machines with downtime, highest first</span>
+              </button>
             </div>
-            <div className="card">
-              <h2 className="text-sm font-semibold uppercase text-slate-500">{canUseAdmin ? 'Users' : 'Today'}</h2>
-              <p className="mt-2 text-3xl font-bold">
-                {canUseAdmin ? users.length : entries.filter((row) => row.date === todayDateString()).length}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                {canUseAdmin ? 'Registered accounts' : "Today's production entries"}
-              </p>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="card">
+                <h2 className="text-sm font-semibold uppercase text-slate-500">{isOperator ? 'My Entries' : 'Entries'}</h2>
+                <p className="mt-2 text-3xl font-bold">{entries.length}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {isOperator ? 'Production records you have submitted' : 'Total records visible to your role'}
+                </p>
+              </div>
+              <div className="card">
+                <h2 className="text-sm font-semibold uppercase text-slate-500">Today</h2>
+                <p className="mt-2 text-3xl font-bold">{entries.filter((row) => row.date === todayDateString()).length}</p>
+                <p className="mt-1 text-xs text-slate-500">Production entries submitted today</p>
+              </div>
+              <div className="card">
+                <h2 className="text-sm font-semibold uppercase text-slate-500">{canUseAdmin ? 'Users' : 'Configuration'}</h2>
+                <p className="mt-2 text-3xl font-bold">
+                  {canUseAdmin ? users.length : masterKinds.reduce((sum, kind) => sum + (masters[kind]?.length || 0), 0)}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {canUseAdmin ? 'Registered accounts' : 'Lines, machines, and processes available'}
+                </p>
+              </div>
             </div>
 
             {canUseSupervisorViews ? (
-              <div className="card md:col-span-3">
+              <div className="card">
                 <h2 className="text-base font-semibold">Missed Entry Notifications</h2>
                 {missedEntries.length === 0 ? (
                   <p className="mt-2 text-sm text-emerald-600">No missed operator entries today.</p>
@@ -1375,13 +1537,18 @@ function App() {
                                   </button>
                                 ) : null}
                                 {canUseAdmin ? (
-                                  <button
-                                    className={isLocked ? 'btn-muted' : 'btn-primary'}
-                                    onClick={() => toggleEntryLock(row)}
-                                    type="button"
-                                  >
-                                    {isLocked ? 'Unlock' : 'Lock'}
-                                  </button>
+                                  <>
+                                    <button
+                                      className={isLocked ? 'btn-muted' : 'btn-primary'}
+                                      onClick={() => toggleEntryLock(row)}
+                                      type="button"
+                                    >
+                                      {isLocked ? 'Unlock' : 'Lock'}
+                                    </button>
+                                    <button className="btn-muted" onClick={() => deleteEntry(row)} type="button">
+                                      Delete
+                                    </button>
+                                  </>
                                 ) : null}
                                 {!canEdit && !canUseAdmin ? (
                                   <span className="text-slate-400">—</span>
@@ -1509,7 +1676,12 @@ function App() {
               {isLoading && activeTab === 'reports' && !reportHasRun ? (
                 <SectionLoader label="Loading production database..." />
               ) : reportHasRun && monitoringRows.length > 0 ? (
-                <ExcelSheet includeDate rows={monitoringRows} title={reportSheetTitle} />
+                <ExcelSheet
+                  includeDate
+                  onDeleteRow={canUseAdmin ? deleteEntry : null}
+                  rows={monitoringRows}
+                  title={reportSheetTitle}
+                />
               ) : (
                 <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">
                   {reportHasRun
@@ -1542,7 +1714,7 @@ function App() {
                   <label className="mb-1 block text-xs font-semibold">Status</label>
                   <select className="select" {...addUserForm.register('status')}>
                     <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
+                    <option disabled={addUserRole === 'admin'} value="inactive">Inactive</option>
                   </select>
                 </div>
                 <div className="md:col-span-3">
@@ -1573,13 +1745,15 @@ function App() {
                       <BodyCell>{row.status}</BodyCell>
                       <BodyCell>
                         <div className="flex flex-wrap gap-1">
-                          <button
-                            className="btn-muted"
-                            onClick={() => updateUserStatus(row.id, row.status === 'active' ? 'inactive' : 'active')}
-                            type="button"
-                          >
-                            {row.status === 'active' ? 'Disable' : 'Enable'}
-                          </button>
+                          {row.role !== 'admin' ? (
+                            <button
+                              className="btn-muted"
+                              onClick={() => updateUserStatus(row.id, row.status === 'active' ? 'inactive' : 'active')}
+                              type="button"
+                            >
+                              {row.status === 'active' ? 'Disable' : 'Enable'}
+                            </button>
+                          ) : null}
                           <button className="btn-muted" onClick={() => resetPassword(row.id)} type="button">Reset Password</button>
                         </div>
                       </BodyCell>
@@ -1594,26 +1768,36 @@ function App() {
         {activeTab === 'master' && canUseAdmin ? (
           <section className="grid gap-4">
             <div className="card">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-base font-semibold">Configuration</h2>
-                  <p className="mt-1 text-sm text-slate-500">Manage dropdown values for production entry and reports.</p>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                    Choose a list, add a new value, or edit an existing row to fill this form.
+                  </p>
                 </div>
+                {editingMasterId ? (
+                  <span className="rounded-sm border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+                    Editing {masterTypeConfig[masterForm.kind]?.label}
+                  </span>
+                ) : null}
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
                 {masterKinds.map((kind) => (
                   <button
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                    className={`rounded-md border px-3 py-2 text-left text-xs font-semibold transition ${
                       masterForm.kind === kind
-                        ? 'bg-[#001e40] text-white'
-                        : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
+                        ? 'border-[#001e40] bg-[#001e40] text-white shadow-sm'
+                        : 'border-slate-300 bg-slate-50 text-slate-800 hover:border-slate-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
                     }`}
                     key={kind}
-                    onClick={() => setMasterForm((prev) => ({ ...prev, kind, name: '', code: '', lineId: '', machineId: '' }))}
+                    onClick={() => resetMasterForm(kind)}
                     type="button"
                   >
-                    {masterTypeConfig[kind]?.label || kind}
+                    <span className="block">{masterTypeConfig[kind]?.label || kind}</span>
+                    <span className={`mt-1 block text-[11px] font-medium ${masterForm.kind === kind ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {(masters[kind] || []).length} records
+                    </span>
                   </button>
                 ))}
               </div>
@@ -1705,11 +1889,12 @@ function App() {
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                <button className="btn-primary" onClick={saveMasterItem} type="button">Add {masterTypeConfig[masterForm.kind]?.label || 'Item'}</button>
-                <label className="btn-muted cursor-pointer">
-                  Import Master Excel
-                  <input className="hidden" onChange={importMasterExcel} type="file" />
-                </label>
+                <button className="btn-primary" onClick={saveMasterItem} type="button">
+                  {editingMasterId ? 'Update' : 'Add'} {masterTypeConfig[masterForm.kind]?.label || 'Item'}
+                </button>
+                {editingMasterId ? (
+                  <button className="btn-muted" onClick={() => resetMasterForm(masterForm.kind)} type="button">Cancel Edit</button>
+                ) : null}
               </div>
             </div>
 
@@ -1746,6 +1931,7 @@ function App() {
                       {masterTypeConfig[masterForm.kind]?.tableColumns.includes('active') ? <BodyCell>{item.active ? '✓ Active' : '✗ Inactive'}</BodyCell> : null}
                       <BodyCell>
                         <div className="flex flex-wrap gap-1">
+                          <button className="btn-muted" onClick={() => editMasterItem(masterForm.kind, item)} type="button">Edit</button>
                           <button className="btn-muted" onClick={() => toggleMasterActive(masterForm.kind, item)} type="button">
                             {item.active ? 'Deactivate' : 'Activate'}
                           </button>
@@ -1761,13 +1947,79 @@ function App() {
         ) : null}
 
       </main>
+      {quickReport ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-3">
+          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 p-4 dark:border-slate-800">
+              <div>
+                <h2 className="text-lg font-bold text-[#001e40] dark:text-blue-100">{quickReport.title}</h2>
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  Generated {quickReport.generatedAt} • {quickReportRows.length} rows
+                </p>
+              </div>
+              <button className="btn-muted" onClick={() => setQuickReport(null)} type="button">Close</button>
+            </div>
+
+            <div className="grid gap-3 border-b border-slate-200 p-4 dark:border-slate-800 sm:grid-cols-4">
+              <MetricCard label="Target" value={quickReportSummary.target} />
+              <MetricCard label="Actual" value={quickReportSummary.total} />
+              <MetricCard label="Efficiency" value={`${quickReportSummary.efficiency}%`} />
+              <MetricCard label="Downtime" value={`${quickReportSummary.downtime} min`} />
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto p-4">
+              {quickReportRows.length ? (
+                <ExcelSheet
+                  includeDate
+                  onDeleteRow={canUseAdmin ? deleteEntry : null}
+                  rows={quickReportRows}
+                  title={quickReport.title}
+                />
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-300 p-10 text-center text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                  {quickReport.emptyText}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 p-4 dark:border-slate-800">
+              <button
+                className="btn-muted"
+                disabled={!quickReportRows.length || isBusy}
+                onClick={() => exportReportExcel(quickReportRows, quickReport.title)}
+                type="button"
+              >
+                Download Excel
+              </button>
+              <button
+                className="btn-primary"
+                disabled={!quickReportRows.length || isBusy}
+                onClick={() => exportReportPdf(quickReportRows, quickReport.title)}
+                type="button"
+              >
+                Download PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       </div>
     </div>
   )
 }
 
-function ExcelSheet({ rows, includeDate = false, title }) {
+function ExcelSheet({ rows, includeDate = false, title, onDeleteRow = null }) {
   const leadingColumns = getLeadingColumns(includeDate)
+  const hasActions = typeof onDeleteRow === 'function'
+  const stickyClass = (key) => {
+    if (key === 'sno') return 'sheet-sticky sheet-sticky-sno'
+    if (includeDate && key === 'date') return 'sheet-sticky sheet-sticky-date'
+    if (key === 'line') return `sheet-sticky ${includeDate ? 'sheet-sticky-line-with-date' : 'sheet-sticky-line'}`
+    if (key === 'machine') return `sheet-sticky sheet-sticky-final ${includeDate ? 'sheet-sticky-machine-with-date' : 'sheet-sticky-machine'}`
+    return ''
+  }
+
+  const headerClass = (column) => [column.vertical ? 'vertical-head' : '', stickyClass(column.key)].filter(Boolean).join(' ')
 
   return (
     <div className={`monitoring-sheet overflow-auto ${includeDate ? 'db-excel-sheet has-date-col' : ''}`}>
@@ -1775,7 +2027,7 @@ function ExcelSheet({ rows, includeDate = false, title }) {
         <thead>
           <tr className="sheet-header-row">
             {leadingColumns.map((column) => (
-              <th className={column.vertical ? 'vertical-head' : ''} key={column.key} rowSpan={2}>
+              <th className={headerClass(column)} key={column.key} rowSpan={2}>
                 {column.label}
               </th>
             ))}
@@ -1787,6 +2039,7 @@ function ExcelSheet({ rows, includeDate = false, title }) {
                 {column.label}
               </th>
             ))}
+            {hasActions ? <th className="action-head" rowSpan={2}>Action</th> : null}
           </tr>
           <tr className="sheet-hour-row">
             {HOUR_COLUMNS.map((column) => (
@@ -1800,10 +2053,10 @@ function ExcelSheet({ rows, includeDate = false, title }) {
         <tbody>
           {rows.map((item) => (
             <tr key={`${item.sno}-${item.date}-${item.machine}-${item.operator}`}>
-              <td>{item.sno}</td>
-              {includeDate ? <td>{item.date}</td> : null}
-              <td>{item.line}</td>
-              <td className="sheet-text">{item.machine}</td>
+              <td className={stickyClass('sno')}>{item.sno}</td>
+              {includeDate ? <td className={stickyClass('date')}>{item.date}</td> : null}
+              <td className={stickyClass('line')}>{item.line}</td>
+              <td className={`sheet-text ${stickyClass('machine')}`}>{item.machine}</td>
               <td className="sheet-text">{item.operator}</td>
               <td className="sheet-text">{item.process}</td>
               <td>{item.shift}</td>
@@ -1819,6 +2072,13 @@ function ExcelSheet({ rows, includeDate = false, title }) {
               <td className="sheet-text">{item.reason}</td>
               <td>{item.efficiency}</td>
               <td className="sheet-text">{item.remarks}</td>
+              {hasActions ? (
+                <td>
+                  <button className="btn-muted px-2 py-1 text-xs" onClick={() => onDeleteRow(item)} type="button">
+                    Delete
+                  </button>
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>
@@ -1829,14 +2089,14 @@ function ExcelSheet({ rows, includeDate = false, title }) {
 
 function HeaderCell({ text }) {
   return (
-    <th className="whitespace-nowrap border-b border-slate-300 bg-slate-200 px-2 py-2 text-left text-xs font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+    <th className="whitespace-nowrap border-b border-slate-400 bg-slate-200 px-2 py-2 text-left text-xs font-bold text-slate-950 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
       {text}
     </th>
   )
 }
 
 function BodyCell({ children, className = '' }) {
-  return <td className={`border-b border-slate-200 p-2 align-top dark:border-slate-800 ${className}`}>{children}</td>
+  return <td className={`border-b border-slate-300 p-2 align-top text-slate-900 dark:border-slate-800 dark:text-slate-100 ${className}`}>{children}</td>
 }
 
 function SelectField({ label, value, onChange, options, emptyLabel, includeUnspecified = true }) {

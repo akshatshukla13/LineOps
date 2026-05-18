@@ -74,7 +74,7 @@ const scaleColumnsToWidth = (columns, availableWidth) => {
 }
 
 const drawTextInCell = (page, text, x, y, width, height, font, options = {}) => {
-  const { align = 'left', size = FONT_SIZE, color = COLORS.text, bold = false } = options
+  const { align = 'left', size = FONT_SIZE, color = COLORS.text } = options
   const display = truncate(text, Math.max(4, Math.floor(width / (size * 0.45))))
   const textWidth = font.widthOfTextAtSize(display, size)
   let textX = x + 3
@@ -216,7 +216,7 @@ export async function exportMonitoringPdf({ rows, reportTitle, brandTitle }) {
   })
 
   const meta = {
-    brandTitle: brandTitle || 'Manufacturing Data Hub',
+    brandTitle: brandTitle || 'Manufacturing Data Software',
     reportTitle: reportTitle || 'Production Monitoring Report',
     generatedAt,
     rowCount: rows.length,
