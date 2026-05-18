@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { ProductionEntry } from '../models/index.js';
+import { MasterItem, ProductionEntry } from '../models/index.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { canEditEntry } from '../middleware/permissions.js';
 import { recordAudit } from '../services/auditService.js';
@@ -16,6 +16,54 @@ import {
 } from '../utils/validators.js';
 
 const router = Router();
+const UNSPECIFIED_TOKEN = '__UNSPECIFIED__';
+
+const unspecifiedCode = (kind, parentCode = '') =>
+  ['UNSPECIFIED', kind.toUpperCase(), parentCode].filter(Boolean).join('-');
+
+const getOrCreateUnspecifiedMaster = async (kind, parents = {}) => {
+  const query = { kind, name: 'Unspecified', ...parents };
+  const existing = await MasterItem.findOne(query).sort({ active: -1, updatedAt: -1 });
+  if (existing) return existing._id;
+
+  const parentCode = parents.lineId ? String(parents.lineId) : parents.machineId ? String(parents.machineId) : '';
+  const created = await MasterItem.create({
+    kind,
+    name: 'Unspecified',
+    code: unspecifiedCode(kind, parentCode.slice(-6)),
+    active: true,
+    ...parents,
+  });
+  return created._id;
+};
+
+const resolveEntryMasterRefs = async (payload) => {
+  const next = { ...payload };
+
+  if (next.shiftId === UNSPECIFIED_TOKEN) {
+    next.shiftId = await getOrCreateUnspecifiedMaster('shift');
+  }
+
+  if (next.lineId === UNSPECIFIED_TOKEN) {
+    next.lineId = await getOrCreateUnspecifiedMaster('line');
+  }
+
+  if (next.machineId === UNSPECIFIED_TOKEN) {
+    next.machineId = await getOrCreateUnspecifiedMaster('machine', { lineId: next.lineId });
+  }
+
+  if (next.processId === UNSPECIFIED_TOKEN) {
+    next.processId = await getOrCreateUnspecifiedMaster('process', { machineId: next.machineId });
+  }
+
+  if (next.operatorId === UNSPECIFIED_TOKEN) {
+    next.operatorId = await getOrCreateUnspecifiedMaster('operator');
+  }
+
+  return next;
+};
+
+const isResolvableEntryRef = (value) => value === UNSPECIFIED_TOKEN || Boolean(asObjectIdOrNull(value));
 
 router.get('/', authMiddleware, async (req, res) => {
   const { date, shiftId, operatorId, machineId, departmentId, from, to, lineId } = req.query;
@@ -87,34 +135,36 @@ router.post('/', authMiddleware, requireRole('admin', 'supervisor', 'operator'),
   }
 
   for (const key of requiredIds) {
-    if (!asObjectIdOrNull(payload[key])) {
+    if (!isResolvableEntryRef(payload[key])) {
       return res.status(400).json({ error: `Invalid ${key}.` });
     }
   }
 
+  const resolvedPayload = await resolveEntryMasterRefs(payload);
+
   const entry = new ProductionEntry({
-    date: payload.date,
-    shiftId: payload.shiftId,
+    date: resolvedPayload.date,
+    shiftId: resolvedPayload.shiftId,
     departmentId: null,
-    lineId: payload.lineId,
-    machineId: payload.machineId,
-    processId: payload.processId,
-    operatorId: payload.operatorId,
+    lineId: resolvedPayload.lineId,
+    machineId: resolvedPayload.machineId,
+    processId: resolvedPayload.processId,
+    operatorId: resolvedPayload.operatorId,
     productId: null,
-    plannedQty: Number(payload.plannedQty),
-    sheetLineNo: payload.sheetLineNo || '',
-    scheduledHours: payload.scheduledHours ?? 8,
-    sheetShift: payload.sheetShift || '',
-    hourlyInputs: normalizeHourlyInputs(payload.hourlyInputs),
-    rejectQty: Number(payload.rejectQty || 0),
-    reworkQty: Number(payload.reworkQty || 0),
-    downtimeMinutes: Number(payload.downtimeMinutes || 0),
+    plannedQty: Number(resolvedPayload.plannedQty),
+    sheetLineNo: resolvedPayload.sheetLineNo || '',
+    scheduledHours: resolvedPayload.scheduledHours ?? 8,
+    sheetShift: resolvedPayload.sheetShift || '',
+    hourlyInputs: normalizeHourlyInputs(resolvedPayload.hourlyInputs),
+    rejectQty: Number(resolvedPayload.rejectQty || 0),
+    reworkQty: Number(resolvedPayload.reworkQty || 0),
+    downtimeMinutes: Number(resolvedPayload.downtimeMinutes || 0),
     downtimeReasonId: null,
-    downtimeOtherText: String(payload.downtimeOtherText || '').trim(),
-    remarks: payload.remarks || '',
-    importSource: payload.importSource || '',
-    importRow: payload.importRow ?? null,
-    status: payload.status || 'draft',
+    downtimeOtherText: String(resolvedPayload.downtimeOtherText || '').trim(),
+    remarks: resolvedPayload.remarks || '',
+    importSource: resolvedPayload.importSource || '',
+    importRow: resolvedPayload.importRow ?? null,
+    status: resolvedPayload.status || 'draft',
     createdBy: req.user._id,
     updatedBy: req.user._id,
     editedCells: [],
@@ -162,13 +212,30 @@ router.put('/:id', authMiddleware, requireRole('admin', 'supervisor', 'operator'
     'status',
   ];
 
+  const refFields = ['shiftId', 'lineId', 'machineId', 'processId', 'operatorId'];
+  for (const field of refFields) {
+    if (req.body[field] !== undefined && !isResolvableEntryRef(req.body[field])) {
+      return res.status(400).json({ error: `Invalid ${field}.` });
+    }
+  }
+
+  const resolvedBody = await resolveEntryMasterRefs({
+    shiftId: req.body.shiftId ?? entry.shiftId,
+    lineId: req.body.lineId ?? entry.lineId,
+    machineId: req.body.machineId ?? entry.machineId,
+    processId: req.body.processId ?? entry.processId,
+    operatorId: req.body.operatorId ?? entry.operatorId,
+  });
+
   const editReason = req.body.editReason || '';
   const changedFields = [];
 
   editableFields.forEach((field) => {
     if (req.body[field] !== undefined) {
       const oldValue = entry[field];
-      let newValue = field === 'hourlyInputs'
+      let newValue = refFields.includes(field)
+        ? resolvedBody[field]
+        : field === 'hourlyInputs'
         ? normalizeHourlyInputs(req.body[field])
         : req.body[field];
 
@@ -206,6 +273,20 @@ router.put('/:id', authMiddleware, requireRole('admin', 'supervisor', 'operator'
 
   await recordAudit(req.user._id, 'update', 'entry', entry._id, { changedFields, editReason });
   return res.json(entry);
+});
+
+router.delete('/:id', authMiddleware, requireRole('admin'), async (req, res) => {
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid entry id.' });
+  }
+
+  const entry = await ProductionEntry.findByIdAndDelete(req.params.id);
+  if (!entry) {
+    return res.status(404).json({ error: 'Entry not found.' });
+  }
+
+  await recordAudit(req.user._id, 'delete', 'entry', entry._id, { date: entry.date, status: entry.status });
+  return res.json({ ok: true });
 });
 
 router.post('/:id/lock', authMiddleware, requireRole('admin'), async (req, res) => {

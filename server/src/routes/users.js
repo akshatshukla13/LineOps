@@ -34,6 +34,10 @@ router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
     return res.status(400).json({ error: 'Invalid role.' });
   }
 
+  if (role === 'admin' && status === 'inactive') {
+    return res.status(400).json({ error: 'Admin users must remain active.' });
+  }
+
   const existing = await User.findOne({ username: String(username).toLowerCase().trim() });
   if (existing) {
     return res.status(409).json({ error: 'Username already exists.' });
@@ -68,12 +72,19 @@ router.put('/:id', authMiddleware, requireRole('admin'), async (req, res) => {
     return res.status(404).json({ error: 'User not found.' });
   }
 
+  const nextRole = role !== undefined && ROLE_HIERARCHY[role] ? role : user.role;
+  const nextStatus = status !== undefined && VALID_STATUSES.includes(status) ? status : user.status;
+
+  if (nextRole === 'admin' && nextStatus === 'inactive') {
+    return res.status(400).json({ error: 'Admin users cannot be disabled.' });
+  }
+
   if (fullName !== undefined) user.fullName = fullName;
   if (employeeId !== undefined) user.employeeId = employeeId;
-  if (role !== undefined && ROLE_HIERARCHY[role]) user.role = role;
+  if (role !== undefined && ROLE_HIERARCHY[role]) user.role = nextRole;
   if (assignedDepartment !== undefined) user.assignedDepartment = assignedDepartment;
   if (assignedLines !== undefined) user.assignedLines = assignedLines;
-  if (status !== undefined && VALID_STATUSES.includes(status)) user.status = status;
+  if (status !== undefined && VALID_STATUSES.includes(status)) user.status = nextStatus;
 
   await user.save();
   await recordAudit(req.user._id, 'update', 'user', user._id, { role: user.role, status: user.status });

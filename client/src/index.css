@@ -4,8 +4,8 @@
 
 :root {
   font-family: 'Aptos', 'Segoe UI', Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  color: #191c1d;
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  color: #0f172a;
+  background: linear-gradient(180deg, #f7f9fc 0%, #e9eef6 100%);
 }
 
 body {
@@ -13,9 +13,10 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   background:
-    radial-gradient(circle at top left, rgba(0, 30, 64, 0.08), transparent 28%),
-    radial-gradient(circle at top right, rgba(58, 95, 148, 0.08), transparent 24%),
-    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+    radial-gradient(circle at top left, rgba(0, 30, 64, 0.06), transparent 28%),
+    radial-gradient(circle at top right, rgba(29, 78, 216, 0.08), transparent 24%),
+    linear-gradient(180deg, #f7f9fc 0%, #e9eef6 100%);
+  color: #0f172a;
 }
 
 .dark body {
@@ -200,25 +201,32 @@ body {
 .input,
 .select,
 .textarea {
-  @apply w-full rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-900 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50;
+  @apply w-full rounded-sm border border-slate-400 bg-white px-3 py-2 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-500 focus:border-blue-900 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:placeholder:text-slate-500;
 }
 
 
 .btn-primary {
-  @apply inline-flex items-center justify-center rounded-sm bg-[#001e40] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#003366] disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center justify-center rounded-sm bg-[#001e40] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#003366] disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .btn-muted {
-  @apply inline-flex items-center justify-center rounded-sm border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700;
+  @apply inline-flex items-center justify-center rounded-sm border border-slate-400 bg-white px-3 py-2 text-sm font-semibold text-slate-950 shadow-sm transition hover:border-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700;
 }
 
 .card {
-  @apply min-w-0 rounded-lg border border-[#c3c6d1] bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950;
+  @apply min-w-0 rounded-lg border border-slate-300 bg-white p-4 text-slate-950 shadow-sm dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100;
+}
+
+.dashboard-report-button {
+  @apply flex min-h-36 flex-col justify-center rounded-lg border-2 border-slate-300 bg-white p-5 text-left text-slate-950 shadow-sm transition hover:border-[#001e40] hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-blue-400 dark:hover:bg-slate-800;
 }
 
 .monitoring-sheet {
+  --sheet-header-row-height: 46px;
+  --sheet-cell-border: #334155;
   max-width: 100%;
-  border: 1px solid #111827;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
   background: #fff;
   overscroll-behavior: contain;
 }
@@ -229,19 +237,19 @@ body {
 }
 
 .monitoring-sheet table {
-  min-width: 1735px;
+  min-width: 1680px;
   width: 100%;
   border-collapse: collapse;
   color: #000;
-  font-size: 18px;
-  line-height: 1.15;
+  font-size: 15px;
+  line-height: 1.2;
 }
 
 .monitoring-sheet th,
 .monitoring-sheet td {
-  height: 40px;
-  border: 1px solid #111;
-  padding: 2px 6px;
+  height: 36px;
+  border: 1px solid var(--sheet-cell-border);
+  padding: 3px 6px;
   text-align: center;
   vertical-align: middle;
   white-space: nowrap;
@@ -251,9 +259,12 @@ body {
   position: sticky;
   top: 0;
   z-index: 2;
-  height: 46px;
-  background: #fff;
-  font-weight: 700;
+  height: var(--sheet-header-row-height);
+  background: #e2e8f0;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .dark .monitoring-sheet table {
@@ -274,11 +285,15 @@ body {
 }
 
 .monitoring-sheet .actual-head {
-  font-size: 18px;
+  background: #dbeafe;
+  color: #0f172a;
+  font-size: 13px;
+  letter-spacing: 0;
 }
 
 .monitoring-sheet .vertical-head {
-  width: 38px;
+  width: 36px;
+  min-width: 36px;
   padding: 0;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
@@ -286,12 +301,20 @@ body {
 }
 
 .monitoring-sheet .hour-head {
-  width: 47px;
+  width: 44px;
+  min-width: 44px;
+}
+
+.monitoring-sheet .action-head {
+  min-width: 86px;
 }
 
 .monitoring-sheet .sheet-text {
-  min-width: 120px;
-  text-align: center;
+  min-width: 118px;
+  max-width: 180px;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
 }
 
 .monitoring-sheet .sheet-total {
@@ -311,129 +334,129 @@ body {
 }
 
 .db-excel-sheet {
-  max-height: calc(100vh - 250px);
-  border-color: #c3c6d1;
+  --sheet-header-row-height: 38px;
+  max-height: calc(100vh - 265px);
+  border-color: #94a3b8;
 }
 
 .db-excel-sheet table {
-  min-width: 1460px;
-  font-size: 13px;
-  line-height: 1.1;
+  min-width: 1320px;
+  font-size: 12px;
+  line-height: 1.15;
 }
 
 .db-excel-sheet th,
 .db-excel-sheet td {
-  height: 30px;
-  padding: 1px 5px;
+  height: 28px;
+  padding: 2px 5px;
 }
 
 .db-excel-sheet thead th {
-  height: 40px;
-  box-shadow: inset 0 -1px 0 #111;
+  height: var(--sheet-header-row-height);
+  box-shadow: inset 0 -1px 0 var(--sheet-cell-border);
 }
 
 .db-excel-sheet .actual-head {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .db-excel-sheet .vertical-head {
-  width: 30px;
+  width: 28px;
+  min-width: 28px;
 }
 
 .db-excel-sheet .hour-head {
-  width: 38px;
+  width: 34px;
+  min-width: 34px;
 }
 
 .db-excel-sheet .sheet-text {
-  min-width: 92px;
-  max-width: 150px;
+  min-width: 86px;
+  max-width: 145px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.db-excel-sheet th:nth-child(1),
-.db-excel-sheet td:nth-child(1) {
+.monitoring-sheet .sheet-sticky {
   position: sticky;
+  z-index: 3;
+  background: #fff;
+}
+
+.monitoring-sheet thead .sheet-sticky {
+  z-index: 5;
+  background: #cbd5e1;
+}
+
+.monitoring-sheet .sheet-sticky-final {
+  box-shadow: 1px 0 0 var(--sheet-cell-border);
+}
+
+.monitoring-sheet .sheet-sticky-sno {
   left: 0;
-  z-index: 3;
+  min-width: 48px;
+}
+
+.monitoring-sheet .sheet-sticky-line {
+  left: 48px;
+  min-width: 62px;
+}
+
+.monitoring-sheet .sheet-sticky-machine {
+  left: 110px;
+  min-width: 138px;
+}
+
+.db-excel-sheet .sheet-sticky-sno {
   min-width: 42px;
-  background: #fff;
 }
 
-.db-excel-sheet th:nth-child(2),
-.db-excel-sheet td:nth-child(2) {
-  position: sticky;
+.db-excel-sheet .sheet-sticky-date {
   left: 42px;
-  z-index: 3;
-  min-width: 72px;
-  background: #fff;
-}
-
-.db-excel-sheet th:nth-child(3),
-.db-excel-sheet td:nth-child(3) {
-  position: sticky;
-  left: 114px;
-  z-index: 3;
-  min-width: 56px;
-  background: #fff;
-  box-shadow: 1px 0 0 #111;
-}
-
-.db-excel-sheet.has-date-col th:nth-child(2),
-.db-excel-sheet.has-date-col td:nth-child(2) {
   min-width: 88px;
 }
 
-.db-excel-sheet.has-date-col th:nth-child(3),
-.db-excel-sheet.has-date-col td:nth-child(3) {
+.db-excel-sheet .sheet-sticky-line-with-date {
   left: 130px;
   min-width: 56px;
-  box-shadow: none;
 }
 
-.db-excel-sheet.has-date-col th:nth-child(4),
-.db-excel-sheet.has-date-col td:nth-child(4) {
-  position: sticky;
+.db-excel-sheet .sheet-sticky-machine-with-date {
   left: 186px;
-  z-index: 3;
-  min-width: 120px;
-  background: #fff;
-  box-shadow: 1px 0 0 #111;
-}
-
-.db-excel-sheet thead th:nth-child(-n + 3) {
-  z-index: 4;
-}
-
-.db-excel-sheet.has-date-col thead th:nth-child(-n + 4) {
-  z-index: 4;
-}
-
-.dark .db-excel-sheet th:nth-child(1),
-.dark .db-excel-sheet td:nth-child(1),
-.dark .db-excel-sheet th:nth-child(2),
-.dark .db-excel-sheet td:nth-child(2),
-.dark .db-excel-sheet th:nth-child(3),
-.dark .db-excel-sheet td:nth-child(3),
-.dark .db-excel-sheet.has-date-col th:nth-child(4),
-.dark .db-excel-sheet.has-date-col td:nth-child(4) {
-  background: #1e293b;
+  min-width: 118px;
 }
 
 .monitoring-sheet .sheet-header-row th {
-  background: #f8fafc;
+  background: #e2e8f0;
 }
 
 .monitoring-sheet .sheet-hour-row th {
-  top: 46px;
+  top: var(--sheet-header-row-height);
   z-index: 2;
-  background: #f1f5f9;
+  height: 30px;
+  background: #f8fafc;
+  font-size: 12px;
+  text-transform: none;
 }
 
 .dark .monitoring-sheet .sheet-header-row th {
   background: #1e293b;
+  color: #e2e8f0;
 }
 
 .dark .monitoring-sheet .sheet-hour-row th {
   background: #334155;
+}
+
+.dark .monitoring-sheet .actual-head {
+  background: #1e3a8a;
+  color: #dbeafe;
+}
+
+.dark .monitoring-sheet .sheet-sticky {
+  background: #0f172a;
+}
+
+.dark .monitoring-sheet thead .sheet-sticky {
+  background: #1e293b;
 }
