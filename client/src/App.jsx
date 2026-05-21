@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import ExcelJS from 'exceljs'
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { downloadMonitoringPdf } from './utils/exportMonitoringPdf.js'
 import { ErrorDialog } from './components/ErrorDialog.jsx'
 import { GlobalLoader, SectionLoader } from './components/GlobalLoader.jsx'
@@ -21,7 +22,45 @@ const APP_BRAND = {
 }
 
 const todayDateString = () => new Date().toISOString().slice(0, 10)
+const firstDayOfMonthString = () => {
+  const date = new Date()
+  date.setDate(1)
+  return date.toISOString().slice(0, 10)
+}
 
+const downtimeReasonOptions = [
+  'Power Failure',
+  'Machine Breakdown',
+  'Maintenance',
+  'Material Delay',
+  'Operator Break',
+  'Quality Issue',
+  'Other',
+]
+
+const rejectReworkReasonOptions = [
+  'Quality Issue',
+  'Material Defect',
+  'Operator Error',
+  'Process Issue',
+  'Machine Fault',
+  'Other',
+]
+
+const analyticsCategories = [
+  { key: 'line', label: 'Line' },
+  { key: 'machine', label: 'Machine' },
+  { key: 'process', label: 'Process' },
+  { key: 'operator', label: 'Operator' },
+  { key: 'shift', label: 'Shift' },
+]
+
+const analyticsMetrics = [
+  { key: 'totalProduction', label: 'Total Production' },
+  { key: 'downtimeMinutes', label: 'Downtime (min)' },
+  { key: 'rejectQty', label: 'Rejected Qty' },
+  { key: 'reworkQty', label: 'Rework Qty' },
+]
 if (import.meta.env.PROD && !import.meta.env.VITE_API_BASE_URL) {
   throw new Error('VITE_API_BASE_URL is required in production builds')
 }
@@ -110,6 +149,7 @@ const monitoringColumns = [
   { key: 'total', label: 'T', width: 7 },
   { key: 'rejected', label: 'Rejected', width: 7, vertical: true },
   { key: 'rework', label: 'Rework', width: 7, vertical: true },
+  { key: 'rejectReason', label: 'Reject/Rework Reason', width: 16, vertical: true },
   { key: 'downtime', label: 'Downtime (min)', width: 8, vertical: true },
   { key: 'reason', label: 'Reason', width: 12, vertical: true },
   { key: 'efficiency', label: 'Efficiency (%)', width: 10, vertical: true },
@@ -118,7 +158,7 @@ const monitoringColumns = [
 
 const HOUR_COLUMNS = monitoringColumns.filter((column) => /^h\d+$/.test(column.key))
 const TRAILING_COLUMNS = monitoringColumns.filter((column) =>
-  ['rejected', 'rework', 'downtime', 'reason', 'efficiency', 'remarks'].includes(column.key),
+  ['rejected', 'rework', 'rejectReason', 'downtime', 'reason', 'efficiency', 'remarks'].includes(column.key),
 )
 
 const getLeadingColumns = (includeDate) =>
@@ -162,8 +202,9 @@ const toMonitoringRow = (row, index) => {
     total,
     rejected: row.rejectQty || '',
     rework: row.reworkQty || '',
+    rejectReason: row.rejectReworkReason || '',
     downtime: row.downtimeMinutes || '',
-    reason: row.downtimeOtherText || '',
+    reason: row.downtimeReason === 'Other' ? row.downtimeOtherText || '' : row.downtimeReason || row.downtimeOtherText || '',
     efficiency: `${Math.round(Number(row.efficiencyPct || 0))}%`,
     remarks: row.remarks || '',
   }
@@ -216,7 +257,9 @@ const entrySchema = z.object({
   plannedQty: z.coerce.number().min(0, 'Target quantity must be 0 or more'),
   rejectQty: z.coerce.number().min(0),
   reworkQty: z.coerce.number().min(0),
+  rejectReworkReason: z.string().optional(),
   downtimeMinutes: z.coerce.number().min(0),
+  downtimeReason: z.string().optional(),
   remarks: z.string().optional(),
   downtimeOtherText: z.string().optional(),
 })
@@ -232,7 +275,9 @@ const emptyEntry = () => ({
   hourlyInputs: Array(12).fill(''),
   rejectQty: '',
   reworkQty: '',
+  rejectReworkReason: '',
   downtimeMinutes: '',
+  downtimeReason: '',
   downtimeOtherText: '',
   remarks: '',
   status: 'draft',
@@ -250,7 +295,9 @@ const entryToDraft = (entry) => ({
   hourlyInputs: [...(entry.hourlyInputs || []), ...Array(12).fill(0)].slice(0, 12).map((value) => Number(value || 0)),
   rejectQty: entry.rejectQty ?? 0,
   reworkQty: entry.reworkQty ?? 0,
+  rejectReworkReason: entry.rejectReworkReason || '',
   downtimeMinutes: entry.downtimeMinutes ?? 0,
+  downtimeReason: entry.downtimeReason || '',
   downtimeOtherText: entry.downtimeOtherText || '',
   remarks: entry.remarks || '',
   status: entry.status || 'submitted',
@@ -284,8 +331,17 @@ function App() {
     shiftId: '',
     operatorName: '',
   })
+  const [reportApiRows, setReportApiRows] = useState([])
   const [reportSpreadsheetRows, setReportSpreadsheetRows] = useState([])
   const [reportHasRun, setReportHasRun] = useState(false)
+  const [analyticsFilters, setAnalyticsFilters] = useState({
+    from: firstDayOfMonthString(),
+    to: todayDateString(),
+    category: 'line',
+    metric: 'totalProduction',
+  })
+  const [analyticsRows, setAnalyticsRows] = useState([])
+  const [analyticsHasRun, setAnalyticsHasRun] = useState(false)
   const [quickReport, setQuickReport] = useState(null)
   const [missedEntries, setMissedEntries] = useState([])
   const [isSavingEntry, setIsSavingEntry] = useState(false)
@@ -500,6 +556,54 @@ function App() {
     if (reportFilters.to) return `Production Database — Until ${formatDisplayDate(reportFilters.to)}`
     return 'Production Database — Date Range'
   }, [reportFilters.dateMode, reportFilters.from, reportFilters.to])
+
+  const analyticsMetricLabel = (metricKey) => analyticsMetrics.find((item) => item.key === metricKey)?.label || metricKey
+
+  const analyticsMonthlyTrend = useMemo(() => {
+    const grouped = {}
+    analyticsRows.forEach((entry) => {
+      if (!entry?.date) return
+      const monthKey = entry.date.slice(0, 7)
+      if (!grouped[monthKey]) {
+        grouped[monthKey] = {
+          month: `${monthKey.slice(5)}.${monthKey.slice(0, 4)}`,
+          totalProduction: 0,
+          downtimeMinutes: 0,
+          rejectQty: 0,
+          reworkQty: 0,
+        }
+      }
+      grouped[monthKey].totalProduction += Number(entry.totalProduction || 0)
+      grouped[monthKey].downtimeMinutes += Number(entry.downtimeMinutes || 0)
+      grouped[monthKey].rejectQty += Number(entry.rejectQty || 0)
+      grouped[monthKey].reworkQty += Number(entry.reworkQty || 0)
+    })
+    return Object.values(grouped).sort((a, b) => a.month.localeCompare(b.month))
+  }, [analyticsRows])
+
+  const analyticsCategoryTrend = useMemo(() => {
+    const categoryKey = analyticsFilters.category
+    const values = {}
+    analyticsRows.forEach((entry) => {
+      const master = entry[`${categoryKey}Id`]
+      const label = categoryKey === 'shift' ? getShiftCode(master) : getMasterLabel(master, 'Unassigned')
+      if (!values[label]) {
+        values[label] = { name: label, totalProduction: 0, downtimeMinutes: 0, rejectQty: 0, reworkQty: 0 }
+      }
+      values[label].totalProduction += Number(entry.totalProduction || 0)
+      values[label].downtimeMinutes += Number(entry.downtimeMinutes || 0)
+      values[label].rejectQty += Number(entry.rejectQty || 0)
+      values[label].reworkQty += Number(entry.reworkQty || 0)
+    })
+    return Object.values(values)
+      .sort((a, b) => b[analyticsFilters.metric] - a[analyticsFilters.metric])
+      .slice(0, 10)
+  }, [analyticsFilters.category, analyticsFilters.metric, analyticsRows])
+
+  const analyticsMetricTotal = useMemo(
+    () => analyticsRows.reduce((sum, entry) => sum + Number(entry[analyticsFilters.metric] || 0), 0),
+    [analyticsFilters.metric, analyticsRows],
+  )
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -722,7 +826,8 @@ function App() {
         ...parsed,
         departmentId: null,
         productId: null,
-        downtimeReasonId: null,
+        downtimeReason: entryDraft.downtimeReason || '',
+        rejectReworkReason: entryDraft.rejectReworkReason || '',
         status: 'submitted',
       }
 
@@ -774,12 +879,38 @@ function App() {
 
     try {
       const data = await authFetch(`/api/reports?${query.toString()}`)
+      setReportApiRows(data.report || [])
       setReportSpreadsheetRows(data.spreadsheetRows || [])
       setReportHasRun(true)
       showSuccess(`Loaded ${data.totalRows ?? 0} entries.`, 'Report ready')
     } catch (error) {
       showError(error.message)
     }
+  }
+
+  const runAnalytics = async () => {
+    const filters = analyticsFilters
+    if (!filters.from || !filters.to) {
+      showError('Both start and end dates are required for analytics.')
+      return
+    }
+
+    const query = new URLSearchParams()
+    query.set('from', filters.from)
+    query.set('to', filters.to)
+    const data = await authFetch(`/api/entries?${query.toString()}`)
+    setAnalyticsRows(Array.isArray(data) ? data : [])
+    setAnalyticsHasRun(true)
+  }
+
+  const handleEditReportRow = (rowId) => {
+    const entry = reportApiRows.find((item) => String(item._id || item.id) === String(rowId))
+    if (!entry) {
+      showError('Could not locate entry for editing.')
+      return
+    }
+    setActiveTab('entry')
+    loadEntryForEdit(entry)
   }
 
   const exportReportExcel = async (rowsOverride, titleOverride) => {
@@ -1094,8 +1225,15 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, token, user?.role])
 
+  useEffect(() => {
+    if (!token || !user || activeTab !== 'analytics') return
+    runAnalytics()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, token, user?.role, analyticsFilters.from, analyticsFilters.to])
+
   const canUseAdmin = user?.role === 'admin'
   const canUseSupervisorViews = ['admin', 'supervisor'].includes(user?.role || '')
+  const canViewAnalytics = canUseSupervisorViews
   const isOperator = user?.role === 'operator'
 
   const startNewEntry = () => {
@@ -1164,6 +1302,7 @@ function App() {
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { id: 'entry', label: 'Data Entry', icon: 'table_chart' },
     { id: 'reports', label: 'Reports', icon: 'insert_chart' },
+    ...(canViewAnalytics ? [{ id: 'analytics', label: 'Analytics', icon: 'analytics' }] : []),
     ...(canUseAdmin ? [
       { id: 'users', label: 'Users', icon: 'group' },
       { id: 'master', label: 'Configuration', icon: 'tune' },
@@ -1386,6 +1525,19 @@ function App() {
                   />
                 </div>
                 <div>
+                  <label className="mb-1 block text-xs font-semibold">Reject/Rework Reason</label>
+                  <select
+                    className="select"
+                    onChange={(e) => setDraftField('rejectReworkReason', e.target.value)}
+                    value={entryDraft.rejectReworkReason}
+                  >
+                    <option value="">Select reason</option>
+                    {rejectReworkReasonOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="mb-1 block text-xs font-semibold">Downtime Minutes</label>
                   <input
                     className="input"
@@ -1398,14 +1550,29 @@ function App() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold">Downtime Reason</label>
-                  <input
-                    className="input"
-                    onChange={(e) => setDraftField('downtimeOtherText', e.target.value)}
-                    placeholder="Enter downtime reason"
-                    type="text"
-                    value={entryDraft.downtimeOtherText}
-                  />
+                  <select
+                    className="select"
+                    onChange={(e) => setDraftField('downtimeReason', e.target.value)}
+                    value={entryDraft.downtimeReason}
+                  >
+                    <option value="">Select reason</option>
+                    {downtimeReasonOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </div>
+                {entryDraft.downtimeReason === 'Other' ? (
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-xs font-semibold">Downtime Details</label>
+                    <input
+                      className="input"
+                      onChange={(e) => setDraftField('downtimeOtherText', e.target.value)}
+                      placeholder="Describe the downtime reason"
+                      type="text"
+                      value={entryDraft.downtimeOtherText}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               <div className="mt-3">
@@ -1679,6 +1846,7 @@ function App() {
                 <ExcelSheet
                   includeDate
                   onDeleteRow={canUseAdmin ? deleteEntry : null}
+                  onEditRow={handleEditReportRow}
                   rows={monitoringRows}
                   title={reportSheetTitle}
                 />
@@ -1689,6 +1857,127 @@ function App() {
                     : 'Apply filters or open this tab to load the production database.'}
                 </div>
               )}
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === 'analytics' ? (
+          <section className="grid gap-4">
+            <div className="card">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold">Analytics</h2>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">View monthly trends and category performance over a custom date range.</p>
+                </div>
+                <button className="btn-primary" disabled={isBusy} onClick={runAnalytics} type="button">
+                  Refresh Data
+                </button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold">From</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={analyticsFilters.from}
+                    onChange={(e) => setAnalyticsFilters((prev) => ({ ...prev, from: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold">To</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={analyticsFilters.to}
+                    onChange={(e) => setAnalyticsFilters((prev) => ({ ...prev, to: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold">Category</label>
+                  <select
+                    className="select"
+                    value={analyticsFilters.category}
+                    onChange={(e) => setAnalyticsFilters((prev) => ({ ...prev, category: e.target.value }))}
+                  >
+                    {analyticsCategories.map((option) => (
+                      <option key={option.key} value={option.key}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold">Metric</label>
+                  <select
+                    className="select"
+                    value={analyticsFilters.metric}
+                    onChange={(e) => setAnalyticsFilters((prev) => ({ ...prev, metric: e.target.value }))}
+                  >
+                    {analyticsMetrics.map((option) => (
+                      <option key={option.key} value={option.key}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-3">
+              <div className="card xl:col-span-2">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold">Monthly Trend</h3>
+                  <span className="text-xs text-slate-500">{analyticsMetricLabel(analyticsFilters.metric)}</span>
+                </div>
+                {analyticsHasRun ? (
+                  analyticsMonthlyTrend.length ? (
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={analyticsMonthlyTrend} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Line type="monotone" dataKey={analyticsFilters.metric} stroke="#2563eb" strokeWidth={3} dot={{ r: 3 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700">No analytics data for selected range.</div>
+                  )
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700">Switch to the analytics tab to load trends.</div>
+                )}
+              </div>
+
+              <div className="card">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold">Top {analyticsFilters.category}</h3>
+                  <span className="text-xs text-slate-500">{analyticsMetricLabel(analyticsFilters.metric)}</span>
+                </div>
+                {analyticsHasRun ? (
+                  analyticsCategoryTrend.length ? (
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analyticsCategoryTrend} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0} height={60} />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey={analyticsFilters.metric} fill="#10b981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700">No category data found for the selected range.</div>
+                  )
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700">Refresh analytics to see category trends.</div>
+                )}
+              </div>
+
+              <div className="card">
+                <h3 className="text-sm font-semibold">Selected Metric Total</h3>
+                <p className="mt-3 text-4xl font-bold text-[#001e40] dark:text-blue-100">{analyticsMetricTotal}</p>
+                <p className="mt-2 text-sm text-slate-500">Summed over the selected range and group.</p>
+              </div>
             </div>
           </section>
         ) : null}
@@ -2008,9 +2297,9 @@ function App() {
   )
 }
 
-function ExcelSheet({ rows, includeDate = false, title, onDeleteRow = null }) {
+function ExcelSheet({ rows, includeDate = false, title, onDeleteRow = null, onEditRow = null }) {
   const leadingColumns = getLeadingColumns(includeDate)
-  const hasActions = typeof onDeleteRow === 'function'
+  const hasActions = typeof onDeleteRow === 'function' || typeof onEditRow === 'function'
   const stickyClass = (key) => {
     if (key === 'sno') return 'sheet-sticky sheet-sticky-sno'
     if (includeDate && key === 'date') return 'sheet-sticky sheet-sticky-date'
@@ -2074,9 +2363,18 @@ function ExcelSheet({ rows, includeDate = false, title, onDeleteRow = null }) {
               <td className="sheet-text">{item.remarks}</td>
               {hasActions ? (
                 <td>
-                  <button className="btn-muted px-2 py-1 text-xs" onClick={() => onDeleteRow(item)} type="button">
-                    Delete
-                  </button>
+                  <div className="flex flex-wrap gap-1">
+                    {typeof onEditRow === 'function' ? (
+                      <button className="btn-muted px-2 py-1 text-xs" onClick={() => onEditRow(item.id)} type="button">
+                        Edit
+                      </button>
+                    ) : null}
+                    {typeof onDeleteRow === 'function' ? (
+                      <button className="btn-muted px-2 py-1 text-xs" onClick={() => onDeleteRow(item)} type="button">
+                        Delete
+                      </button>
+                    ) : null}
+                  </div>
                 </td>
               ) : null}
             </tr>

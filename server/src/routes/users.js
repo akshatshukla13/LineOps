@@ -49,6 +49,7 @@ router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
     employeeId,
     username,
     passwordHash,
+    passwordPlain: password,
     role,
     assignedDepartment,
     assignedLines,
@@ -108,6 +109,7 @@ router.post('/:id/reset-password', authMiddleware, requireRole('admin'), async (
   }
 
   user.passwordHash = await bcrypt.hash(password, 10);
+  user.passwordPlain = password
   await user.save();
   await recordAudit(req.user._id, 'reset_password', 'user', user._id);
   return res.json({ ok: true });

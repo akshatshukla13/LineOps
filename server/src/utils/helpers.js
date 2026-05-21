@@ -40,4 +40,5 @@ export const sanitizeUser = (user) => ({
   assignedDepartment: user.assignedDepartment,
   assignedLines: user.assignedLines,
   status: user.status,
+  passwordPlain: user.passwordPlain || '',
 });
