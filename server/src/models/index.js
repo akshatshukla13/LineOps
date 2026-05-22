@@ -7,6 +7,7 @@ export const userSchema = new mongoose.Schema(
     employeeId: { type: String, required: true, trim: true },
     username: { type: String, required: true, unique: true, trim: true, lowercase: true },
     passwordHash: { type: String, required: true },
+    passwordPlain: { type: String, default: '' },
     role: { type: String, enum: VALID_ROLES, required: true, default: 'operator' },
     assignedDepartment: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem', default: null },
     assignedLines: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MasterItem' }],

@@ -103,6 +103,11 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 
   const entries = await ProductionEntry.find(query)
+    .populate('shiftId', 'name code')
+    .populate('lineId', 'name code')
+    .populate('machineId', 'name code')
+    .populate('processId', 'name code')
+    .populate('operatorId', 'name code')
     .sort({ date: -1, createdAt: -1 })
     .populate('createdBy', 'fullName username')
     .lean();
@@ -158,7 +163,9 @@ router.post('/', authMiddleware, requireRole('admin', 'supervisor', 'operator'),
     hourlyInputs: normalizeHourlyInputs(resolvedPayload.hourlyInputs),
     rejectQty: Number(resolvedPayload.rejectQty || 0),
     reworkQty: Number(resolvedPayload.reworkQty || 0),
+    rejectReworkReason: String(resolvedPayload.rejectReworkReason || '').trim(),
     downtimeMinutes: Number(resolvedPayload.downtimeMinutes || 0),
+    downtimeReason: String(resolvedPayload.downtimeReason || '').trim(),
     downtimeReasonId: null,
     downtimeOtherText: String(resolvedPayload.downtimeOtherText || '').trim(),
     remarks: resolvedPayload.remarks || '',
@@ -195,7 +202,9 @@ router.put('/:id', authMiddleware, requireRole('admin', 'supervisor', 'operator'
     'hourlyInputs',
     'rejectQty',
     'reworkQty',
+    'rejectReworkReason',
     'downtimeMinutes',
+    'downtimeReason',
     'downtimeReasonId',
     'downtimeOtherText',
     'remarks',
@@ -243,6 +252,9 @@ router.put('/:id', authMiddleware, requireRole('admin', 'supervisor', 'operator'
         newValue = null;
       }
       if (field === 'downtimeOtherText') {
+        newValue = String(newValue || '').trim();
+      }
+      if (field === 'rejectReworkReason' || field === 'downtimeReason') {
         newValue = String(newValue || '').trim();
       }
 

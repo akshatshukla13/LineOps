@@ -377,53 +377,55 @@ body {
   text-overflow: ellipsis;
 }
 
-.monitoring-sheet .sheet-sticky {
-  position: sticky;
-  z-index: 3;
-  background: #fff;
-}
+@media (min-width: 768px) {
+  .monitoring-sheet .sheet-sticky {
+    position: sticky;
+    z-index: 3;
+    background: #fff;
+  }
 
-.monitoring-sheet thead .sheet-sticky {
-  z-index: 5;
-  background: #cbd5e1;
-}
+  .monitoring-sheet thead .sheet-sticky {
+    z-index: 5;
+    background: #cbd5e1;
+  }
 
-.monitoring-sheet .sheet-sticky-final {
-  box-shadow: 1px 0 0 var(--sheet-cell-border);
-}
+  .monitoring-sheet .sheet-sticky-final {
+    box-shadow: 1px 0 0 var(--sheet-cell-border);
+  }
 
-.monitoring-sheet .sheet-sticky-sno {
-  left: 0;
-  min-width: 48px;
-}
+  .monitoring-sheet .sheet-sticky-sno {
+    left: 0;
+    min-width: 48px;
+  }
 
-.monitoring-sheet .sheet-sticky-line {
-  left: 48px;
-  min-width: 62px;
-}
+  .monitoring-sheet .sheet-sticky-line {
+    left: 48px;
+    min-width: 62px;
+  }
 
-.monitoring-sheet .sheet-sticky-machine {
-  left: 110px;
-  min-width: 138px;
-}
+  .monitoring-sheet .sheet-sticky-machine {
+    left: 110px;
+    min-width: 138px;
+  }
 
-.db-excel-sheet .sheet-sticky-sno {
-  min-width: 42px;
-}
+  .db-excel-sheet .sheet-sticky-sno {
+    min-width: 42px;
+  }
 
-.db-excel-sheet .sheet-sticky-date {
-  left: 42px;
-  min-width: 88px;
-}
+  .db-excel-sheet .sheet-sticky-date {
+    left: 42px;
+    min-width: 88px;
+  }
 
-.db-excel-sheet .sheet-sticky-line-with-date {
-  left: 130px;
-  min-width: 56px;
-}
+  .db-excel-sheet .sheet-sticky-line-with-date {
+    left: 130px;
+    min-width: 56px;
+  }
 
-.db-excel-sheet .sheet-sticky-machine-with-date {
-  left: 186px;
-  min-width: 118px;
+  .db-excel-sheet .sheet-sticky-machine-with-date {
+    left: 186px;
+    min-width: 118px;
+  }
 }
 
 .monitoring-sheet .sheet-header-row th {
@@ -453,10 +455,12 @@ body {
   color: #dbeafe;
 }
 
-.dark .monitoring-sheet .sheet-sticky {
-  background: #0f172a;
-}
+@media (min-width: 768px) {
+  .dark .monitoring-sheet .sheet-sticky {
+    background: #0f172a;
+  }
 
-.dark .monitoring-sheet thead .sheet-sticky {
-  background: #1e293b;
+  .dark .monitoring-sheet thead .sheet-sticky {
+    background: #1e293b;
+  }
 }
