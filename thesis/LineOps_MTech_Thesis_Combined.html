@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>B.Tech+M.Tech (Internet of Things) Thesis - LineOps</title>
+  <!-- Load Mermaid Library from CDN -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ 
+      startOnLoad: true,
+      theme: 'neutral',
+      flowchart: { useMaxWidth: false, htmlLabels: true }
+    });
+  </script>
+  <style>
+    @page {
+      size: A4;
+      margin: 25mm 20mm 20mm 20mm;
+      @bottom-right {
+        content: counter(page);
+        font-family: 'Times New Roman', serif;
+        font-size: 10pt;
+      }
+    }
+    
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 12pt;
+      line-height: 1.5;
+      text-align: justify;
+      color: #000;
+      background: #fff;
+      margin: 0;
+      padding: 0;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-family: 'Times New Roman', Times, serif;
+      color: #000;
+      page-break-after: avoid;
+    }
+
+    /* Chapter Title Styling */
+    h1 {
+      font-size: 16pt;
+      text-align: center;
+      margin-top: 50px;
+      margin-bottom: 25px;
+      text-transform: uppercase;
+      page-break-before: always;
+      line-height: 1.3;
+    }
+
+    /* First heading shouldn't have page break-before if it's the title page */
+    .title-page-container h1 {
+      page-break-before: avoid !important;
+      margin-top: 0;
+    }
+
+    /* Headings Styling */
+    h2 {
+      font-size: 14pt;
+      margin-top: 35px;
+      margin-bottom: 15px;
+      border-bottom: 1px solid #000;
+      padding-bottom: 3px;
+    }
+
+    h3 {
+      font-size: 12pt;
+      font-weight: bold;
+      margin-top: 25px;
+      margin-bottom: 10px;
+    }
+
+    h4 {
+      font-size: 12pt;
+      font-style: italic;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      margin-top: 0;
+      margin-bottom: 15px;
+      text-indent: 0.5in;
+    }
+
+    /* Remove indent on lists, figures, tables, code blocks */
+    li p, blockquote p, pre p, td p, .no-indent {
+      text-indent: 0 !important;
+    }
+
+    ul, ol {
+      margin-top: 0;
+      margin-bottom: 15px;
+      padding-left: 30px;
+    }
+
+    li {
+      margin-bottom: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 25px 0;
+      page-break-inside: avoid;
+    }
+
+    th, td {
+      border: 1px solid #000;
+      padding: 10px;
+      text-align: left;
+      font-size: 11pt;
+    }
+
+    th {
+      background-color: #f2f2f2;
+      font-weight: bold;
+    }
+
+    pre, code {
+      font-family: 'Consolas', 'Courier New', Courier, monospace;
+      font-size: 10pt;
+      background-color: #f5f5f5;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+
+    pre {
+      padding: 15px;
+      border: 1px solid #ccc;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin-bottom: 20px;
+      page-break-inside: avoid;
+    }
+
+    pre code {
+      padding: 0;
+      background-color: transparent;
+    }
+
+    /* Mermaid rendering box styling */
+    .mermaid {
+      background: transparent;
+      border: none;
+      display: flex;
+      justify-content: center;
+      margin: 30px 0;
+      page-break-inside: avoid;
+    }
+
+    /* Centered text helper */
+    .text-center {
+      text-align: center;
+    }
+
+    /* Cover Page/Title Page layout overrides */
+    .title-page-layout {
+      text-align: center;
+      padding: 40px 0;
+    }
+  </style>
+</head>
+<body>
+  <p>﻿<style>
+body {
+  font-family: &#39;Times New Roman&#39;, Times, serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  text-align: justify;
+}
+h1 {
+  font-size: 16pt;
+  text-align: center;
+  page-break-before: always;
+}
+h2, h3, h4 {
+  font-size: 14pt;
+}
+</style></p>
+<h1>TITLE PAGE</h1>
+<br>
+<br><div align="center">
+  <h2><b>SMART PRODUCTION MONITORING SYSTEM FOR MANUFACTURING INDUSTRIES (LINEOPS)</b></h2>
+  <br>
+  <p>A Major Project Report / Thesis</p>
+  <p>submitted in partial fulfillment of the requirements</p>
+  <p><b>for the award of dual-degree of B.Tech+M.Tech (Internet of Things) Five Years</b></p>  <br>
+  <br>
+  <p><i>Under the supervision of:</i></p>
+  <p><b>[Mentor Name]</b><br>[Mentor Designation]<br>[Mentor Company Name]</p>  <br>
+  <br>
+  <p><i>Submitted by:</i></p>
+  <p><b>[Student Name]</b><br>Roll No: [Roll Number]<br>Enrollment No: [Enrollment Number]</p>  <br>
+  <br>
+  <!-- University/Institute Logo Placeholder - Logo permitted ONLY on Title Page -->
+  <div style="border: 1px dashed #ccc; padding: 20px; width: 200px; margin: 0 auto;">
+    [INSERT UNIVERSITY / INSTITUTE LOGO HERE]<br>
+    DAVV / School of Internet of Things (SOI)
+  </div>  <br>
+  <br>
+  <p><b>School of Internet of Things (SOI)</b><br>
+  Devi Ahilya Vishwavidyalaya (DAVV), Indore<br>
+  [Year of Submission]</p>
+</div><hr>
+<h1>UNDERTAKING</h1>
+<p>I, <strong>[Student Name]</strong>, student of B.Tech+M.Tech (Internet of Things) Five Years, Department of School of Internet of Things, Devi Ahilya Vishwavidyalaya, Indore, hereby declare that the project work presented in this report titled <strong>&quot;Smart Production Monitoring System for Manufacturing Industries (LineOps)&quot;</strong> is an authentic record of my own work carried out under the supervision of <strong>[Mentor Name]</strong>, <strong>[Mentor Designation]</strong> at <strong>[Mentor Company Name]</strong>.</p>
+<p>This report has not been submitted in part or full to any other university or institute for the award of any degree or diploma.</p>
+<br>
+<br>
+<br>
+<br><div align="right">
+  <p><b>[Student Name]</b><br>
+  Roll No: [Roll Number]<br>
+  School of Internet of Things<br>
+  Devi Ahilya Vishwavidyalaya, Indore</p>
+</div><hr>
+<h1>CERTIFICATE</h1>
+<p>This is to certify that the project report entitled <strong>&quot;Smart Production Monitoring System for Manufacturing Industries (LineOps)&quot;</strong> being submitted by <strong>[Student Name]</strong> in partial fulfillment of the requirements for the award of <strong>dual-degree of B.Tech+M.Tech (Internet of Things) Five Years</strong> from Devi Ahilya Vishwavidyalaya, Indore, is a record of bonafide work carried out by him/her under our supervision and guidance.</p>
+<p>The results embodied in this report have not been submitted to any other University or Institute for the award of any degree or diploma.</p>
+<br>
+<br>
+<br>
+<br><table width="100%" style="border: none;">
+  <tr style="border: none;">
+    <td width="50%" style="border: none; text-align: left;">
+      <b>[Mentor Name]</b><br>
+      Internal/External Guide<br>
+      [Mentor Designation]<br>
+      [Mentor Company Name]
+    </td>
+    <td width="50%" style="border: none; text-align: right;">
+      <b>[Director/HOD Name]</b><br>
+      Head of Department<br>
+      School of Internet of Things<br>
+      DAVV, Indore
+    </td>
+  </tr>
+</table><hr>
+<h1>ACKNOWLEDGEMENT</h1>
+<p>I express my deepest gratitude and sincere thanks to my project guide, <strong>[Mentor Name]</strong>, <strong>[Mentor Designation]</strong>, for his/her invaluable guidance, constant encouragement, and constructive feedback throughout the course of this project. His/her deep insights and regular monitoring have been instrumental in shaping this project report.</p>
+<p>I would also like to thank the Head of the Department, <strong>[Director/HOD Name]</strong>, and the faculty members of the School of Internet of Things, Devi Ahilya Vishwavidyalaya, Indore, for providing the necessary facilities and academic environment that facilitated the successful completion of this work.</p>
+<p>Lastly, I am grateful to my family, peers, and friends for their moral support, understanding, and assistance in moments of difficulty, which helped me stay focused and complete this thesis within the stipulated duration.</p>
+<br>
+<br>
+<br>
+<br><div align="right">
+  <p><b>[Student Name]</b></p>
+</div>
+<style>
+body {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  text-align: justify;
+}
+h1 {
+  font-size: 16pt;
+  text-align: center;
+  page-break-before: always;
+}
+h2, h3, h4 {
+  font-size: 14pt;
+}
+</style><h1>ABSTRACT</h1>
+<p>In contemporary manufacturing industries, the shift from traditional manual operations toward Industry 4.0 paradigms is crucial for sustaining competitive advantages, improving operational efficiency, and reducing overhead costs. A fundamental pillar of this transition is the establishment of a robust digital data infrastructure that can reliably track shop-floor operations in real-time. This thesis presents the design, development, and implementation of the <strong>Smart Production Monitoring System (LineOps)</strong>, a role-based, full-stack web application developed to replace outdated, manual, and error-prone Excel-based data entry workflows on manufacturing assembly lines. </p>
+<p>The primary motivation of this work stems from the critical need to eliminate information silos, human errors, and late-reporting discrepancies that characterize paper-and-spreadsheet-based tracking systems. By introducing a centralized platform with structured data input validation, real-time metric computations, and granular authorization controls, LineOps ensures data integrity and operational visibility. For a five-year dual-degree curriculum in the Internet of Things (IoT), this system functions as a critical software foundation. It serves as the digital core and transaction layer upon which physical IoT sensors, edge monitoring gateways, and automated machine telemetry devices can be integrated to form a comprehensive cyber-physical production environment.</p>
+<p>The architecture of LineOps is built upon a secure, scalable, and responsive technology stack. The backend server utilizes Node.js and Express to expose a RESTful API, coupled with MongoDB and Mongoose ORM for storing production logs, master data definitions, user records, and granular system activity logs. The frontend client is built using React, Vite, and Tailwind CSS, leveraging React Hook Form and Zod for client-side data validation. Key features of the system include an interactive, spreadsheet-like daily entry grid supporting touch and mobile input devices, dependent master dropdown selections (Line to Machine, Machine to Process, and Department to Operator), auto-calculations of metrics (total production, net production, efficiency, loss, and downtime percentages), automatic background draft auto-saving, visual performance band indicators, Excel/PDF reporting, and a supervisor notification panel for missed entries.</p>
+<p>The system was evaluated through simulated and real production data imports, demonstrating significant improvements in data logging speed, immediate calculation accuracy, and report generation efficiency. Ultimately, the LineOps platform lays the groundwork for advanced IoT telemetry integrations, enabling future implementations of real-time machine downtime analysis, edge-based predictive maintenance, and closed-loop manufacturing execution system (MES) feedback.</p>
+<br>
+<br><p><b>Keywords:</b> Industry 4.0, Production Monitoring, Full-Stack Web Application, Mongoose ORM, React, Data Integrity, Manufacturing Execution System, Internet of Things (IoT) Data Infrastructure.</p>
+<style>
+body {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  text-align: justify;
+}
+h1 {
+  font-size: 16pt;
+  text-align: center;
+  page-break-before: always;
+}
+h2, h3, h4 {
+  font-size: 14pt;
+}
+</style><h1>CHAPTER 1: INTRODUCTION</h1>
+<h2>1.1 Background of the Study</h2>
+<p>In the era of Industry 4.0, manufacturing enterprises are undergoing rapid digital transformation to enhance their operational efficiency, throughput, and agility [1]. Traditionally, production shop floors operated in siloed environments where performance metrics, machine statuses, and operator yields were recorded on paper logs or individual local spreadsheets. However, modern competitive dynamics necessitate real-time data visibility, prompt decision-making, and seamless integration between physical operations and corporate systems. </p>
+<p>For academic domains like the Internet of Things (IoT), production monitoring serves as the logical starting point for establishing a cyber-physical system (CPS) [2]. Before physical sensors, vibration analyzers, or smart power meters can be deployed to stream machine status directly to the cloud, there must exist a structured transactional database and application layer that understands the basic organizational elements of the shop floorâ€”specifically, shifts, production lines, machines, processes, operators, products, and daily yields. The establishment of this digital-twin data model is a prerequisite for contextualizing raw sensor telemetry data, thereby enabling higher-level analytics such as Overall Equipment Effectiveness (OEE) tracking and predictive maintenance.</p>
+<h2>1.2 Statement of the Problem</h2>
+<p>Despite the advent of high-performance database systems, many small-to-medium manufacturing enterprises (SMEs) continue to rely on manual Microsoft Excel spreadsheets for daily production logging. This practice presents several severe operational challenges:</p>
+<ol>
+<li><strong>Lack of Real-time Visibility</strong>: Excel sheets reside on local machines, leading to delayed reporting, where supervisors and plant managers only review daily reports hours or days after shifts end.</li>
+<li><strong>Data Entry Errors and Inconsistencies</strong>: Manual systems lack interactive validation. Operators frequently enter incorrect values, mismatched operator-department mappings, or invalid numeric ranges.</li>
+<li><strong>No Audit Trial or Change Tracking</strong>: When records are edited or modified post-submission, there is no history showing who modified the values, what the original values were, or the reasons behind the changes.</li>
+<li><strong>Mismatched Workflows and Permissions</strong>: Spreadsheets are generally shared without role-based access control (RBAC). Operators can accidentally overwrite formulas or delete historic logs, while unauthorized personnel can view confidential operator or product information.</li>
+<li><strong>Absence of Record Locking</strong>: Once production figures are finalized and approved, they must be locked to prevent retro-active changes for audit compliance. Manual spreadsheets cannot enforce such operational boundaries.</li>
+</ol>
+<h2>1.3 Motivation</h2>
+<p>The development of the LineOps Smart Production Monitoring System is motivated by the critical need to solve these spreadsheet-based data management issues. By implementing a central web application with role-based access control (RBAC), manufacturing firms can transition from localized Excel files to a unified, multi-user web portal. Furthermore, the application is designed to be mobile-first and desktop-friendly, recognizing that shop-floor operators and supervisors often require portable devices (like tablets or industrial mobile terminals) to enter data directly at the machine station. </p>
+<p>From an academic and technological perspective, the motivation is to design a software system that calculates vital metrics (e.g., Efficiency %, Loss %, and Downtime %) automatically and instantaneously. The system also logs every edit action to an audit history table, establishing a secure record of shop-floor activities. This transition establishes a robust digital ledger of production data, creating a clean dataset that is ready for downstream IoT sensor integration and AI-based anomaly detection.</p>
+<h2>1.4 Objectives of the Research</h2>
+<p>The primary objectives of this research project are as follows:</p>
+<ol>
+<li>To design and implement a role-based authentication and authorization system (Admin, Supervisor, and Operator) to govern access and editing rights.</li>
+<li>To build an interactive, mobile-friendly spreadsheet-like daily entry grid that streamlines data entry with numeric keypad support, copy-previous-row actions, and auto-saving mechanisms.</li>
+<li>To implement automated, mathematical metrics calculation on the backend, calculating net production, hourly efficiencies, and downtime percentages on the fly.</li>
+<li>To establish a Master Data Management (MDM) portal allowing administrators to update shifts, lines, machines, processes, operators, and products with validation.</li>
+<li>To design and develop reporting modules with advanced filtering (by date, line, operator, machine, shift) and visual chart analysis using Recharts.</li>
+<li>To implement automated Excel (via ExcelJS) and PDF (via pdf-lib) export capabilities directly from the client web browser.</li>
+</ol>
+<h2>1.5 Scope of the System</h2>
+<p>The scope of the LineOps system covers the software environment supporting the administrative configuration and production logging for a standard manufacturing shop floor. It includes the user roles, dropdown mappings, data-entry forms, and automated calculations. The scope is bounded as follows:</p>
+<ul>
+<li><strong>Target Users</strong>: Limited to Operators (who enter data), Supervisors (who review and lock data), and Admins (who manage users, configure master data, and unlock records).</li>
+<li><strong>Time Horizon</strong>: Production data is tracked across 12-hour shifts.</li>
+<li><strong>Reporting</strong>: Daily and historical summaries are rendered as charts, with browser-generated exports. It does not include automated email reports or ERP synchronization.</li>
+<li><strong>IoT Integration Boundary</strong>: The database design and APIs are structured to receive machine data, but direct PLC/SCADA physical sensor integrations are designated as future work.</li>
+</ul>
+<h2>1.6 Contributions of the Thesis</h2>
+<p>The primary contributions of this thesis include:</p>
+<ol>
+<li><strong>Structured Data Validation &amp; Mapping</strong>: Implementation of dependent master dropdowns (e.g., Line to Machines, Machine to Processes) that prevent operators from entering physically impossible machine-process configurations.</li>
+<li><strong>Audit Logging Framework</strong>: Design of an automatic schema-level tracking array (<code>editLogs</code>) in Mongoose that records every field modification, storing old/new values, actor ID, timestamp, and edit reason.</li>
+<li><strong>Draft Resiliency Mechanism</strong>: Implementation of a 30-second client-side auto-save draft mechanism that prevents data loss from network drops or device shutoffs on the shop floor.</li>
+<li><strong>Optimized Report Generation</strong>: Execution of browser-side spreadsheet parsing and rendering, enabling zero-server-overhead PDF and Excel generation.</li>
+</ol>
+<h2>1.7 Organization of the Thesis</h2>
+<p>The rest of this thesis is organized into five main chapters as follows:</p>
+<ul>
+<li><strong>Chapter 2: Background Study &amp; Tech Stack</strong> reviews relevant manufacturing literature, the limitations of Excel-based reporting, related work, and details the tools and technologies (both software frameworks and database models) utilized in developing the LineOps application.</li>
+<li><strong>Chapter 3: proposed Design &amp; Implementation</strong> describes the core design and implementation of the proposed system. It includes the block diagram, system architecture, database ER diagrams, API route structures, operational workflows, and algorithms used.</li>
+<li><strong>Chapter 4: Results, Testing &amp; Analysis</strong> details the verification strategy, unit and integration test cases, realistic testing matrices, and analyzes the performance and advantages of the system, accompanied by visual UI descriptions.</li>
+<li><strong>Chapter 5: Conclusion &amp; Future Scope</strong> summarizes the overall work, details realistic future scope improvementsâ€”specifically focusing on physical IoT sensor data ingestionâ€”and presents the final concluding remarks.</li>
+<li><strong>References</strong> lists all standard academic documents and documentations cited throughout the chapters.</li>
+<li><strong>Appendix</strong> contains configurations, the database schema definition, installation steps, and code snippets.</li>
+</ul>
+<style>
+body {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  text-align: justify;
+}
+h1 {
+  font-size: 16pt;
+  text-align: center;
+  page-break-before: always;
+}
+h2, h3, h4 {
+  font-size: 14pt;
+}
+</style><h1>CHAPTER 2: BACKGROUND STUDY &amp; TECH STACK</h1>
+<h2>2.1 Domain Knowledge and Context</h2>
+<p>In modern industrial engineering, lean manufacturing principles focus on the systematic minimization of waste (&quot;Muda&quot;) within a manufacturing system without sacrificing productivity [3]. One of the most effective ways to identify and eliminate waste is to maintain high-resolution production tracking. This tracking measures the performance of machines, processes, and operators. The data points collected typically include planned targets, hourly yields, rejects, rework quantities, and machine downtime minutes.</p>
+<p>By capturing these values hourly, management can analyze trends and calculate Key Performance Indicators (KPIs) such as Overall Equipment Effectiveness (OEE) [4]. OEE is calculated based on three factors:</p>
+<ol>
+<li><strong>Availability</strong>: The ratio of actual operating time to planned production time (impacted by downtime).</li>
+<li><strong>Performance</strong>: The ratio of actual output to the design capacity of the machine (impacted by slow cycles or minor stops).</li>
+<li><strong>Quality</strong>: The ratio of good parts produced to the total parts produced (impacted by reject and rework quantities).</li>
+</ol>
+<p>In traditional setups, tracking these three metrics requires significant administrative labor, with data collected on paper logs and entered into Excel at the end of the day. This manual process introduces lag and is prone to errors, which hinders real-time waste minimization.</p>
+<h2>2.2 Literature Review: Limitations of Spreadsheets</h2>
+<p>Historically, Microsoft Excel has been the default choice for data logging due to its low initial cost, ease of use, and flexibility. However, database research shows that using spreadsheets as multi-user transaction engines introduces severe vulnerabilities [5]:</p>
+<ol>
+<li><strong>Concurrency Failures</strong>: Spreadsheets lack row-level or document-level locks. When multiple operators attempt to update the same spreadsheet simultaneously, write conflicts occur, resulting in data loss.</li>
+<li><strong>Logic and Formula Corruption</strong>: Excel formulas are embedded directly within cells. An operator can easily overwrite a calculation formula with a static value, corrupting subsequent aggregations.</li>
+<li><strong>Absence of Referential Integrity</strong>: Excel does not natively enforce relational bounds unless complex VBA scripts are written. As a result, an operator could type a machine name that does not exist on the specified line, corrupting database consistency.</li>
+<li><strong>No Security and Traceability</strong>: Spreadsheets do not record change logs. If an efficiency percentage is modified retroactively, there is no digital trail indicating the actor or the justification [6].</li>
+</ol>
+<p>These limitations highlight the necessity of web-based Manufacturing Execution Systems (MES) that utilize relational or document-oriented databases with centralized business logic.</p>
+<h2>2.3 Prerequisites for Web-Based MES Systems</h2>
+<p>To build a scalable, multi-user web portal to replace spreadsheets, several modern software paradigms are required:</p>
+<ul>
+<li><strong>Model-View-Controller (MVC) and Layered Architecture</strong>: Decoupling the data presentation (frontend), route management, and data access layers (backend) ensures that the application is maintainable and testable [7].</li>
+<li><strong>NoSQL Databases and Document Model</strong>: Unlike traditional relational databases (SQL) that require rigid tables with complex joins, document-oriented databases (like MongoDB) store data in JSON-like documents. This flexible structure is well-suited for manufacturing environments where machine definitions, process steps, and hourly tracking sheets evolve.</li>
+<li><strong>Stateless Authentication</strong>: Using JSON Web Tokens (JWT) allows the server to authenticate client requests without maintaining server-side session states, making the API scalable and compatible with edge device requests [8].</li>
+</ul>
+<h2>2.4 Related Enterprise Solutions</h2>
+<p>Currently, several commercial software systems address production monitoring, such as SAP Manufacturing Execution (SAP ME), Plex Smart Manufacturing Platform, and Siemens Opcenter. Table 2.1 provides a comparative analysis of these systems against the proposed LineOps system.</p>
+<h3>Table 2.1: Comparative Analysis of Production Monitoring Solutions</h3>
+<table>
+<thead>
+<tr>
+<th>Feature / Parameter</th>
+<th>SAP ME</th>
+<th>Plex Cloud MES</th>
+<th>Proposed LineOps System</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Target Enterprise</strong></td>
+<td>Large Multinational Corps</td>
+<td>Medium to Large Scale</td>
+<td>Small to Medium Enterprises (SMEs)</td>
+</tr>
+<tr>
+<td><strong>Cost &amp; License</strong></td>
+<td>Very High (Enterprise License)</td>
+<td>High (SaaS Subscription)</td>
+<td>Low (Open-Source Stack)</td>
+</tr>
+<tr>
+<td><strong>Infrastructure</strong></td>
+<td>On-Premises Servers / SAP Cloud</td>
+<td>Pure Multi-Tenant Cloud</td>
+<td>On-Premises or Private Cloud Hostable</td>
+</tr>
+<tr>
+<td><strong>Deployment Time</strong></td>
+<td>6 to 18 Months</td>
+<td>3 to 9 Months</td>
+<td>Under 1 Month</td>
+</tr>
+<tr>
+<td><strong>Customization</strong></td>
+<td>Complex (Requires SAP ABAP Devs)</td>
+<td>Proprietary API Configuration</td>
+<td>High (Javascript/React Stack)</td>
+</tr>
+<tr>
+<td><strong>Data Security</strong></td>
+<td>High</td>
+<td>High</td>
+<td>High (Self-hosted or Private Cloud)</td>
+</tr>
+<tr>
+<td><strong>Learning Curve</strong></td>
+<td>Steep (Requires Training)</td>
+<td>Moderate</td>
+<td>Very Low (Spreadsheet-like design)</td>
+</tr>
+</tbody></table>
+<p>While commercial platforms are highly capable, their cost, long deployment times, and complex user interfaces make them impractical for small and medium manufacturing units. LineOps offers a lightweight, secure, and user-friendly alternative designed specifically for the needs of SMEs.</p>
+<h2>2.5 Justification of the Selected Tech Stack</h2>
+<p>The LineOps system was built using a modern, open-source JavaScript-centric stack to ensure rapid development, responsive UI rendering, and scalable database performance:</p>
+<h3>2.5.1 Backend Technologies</h3>
+<ol>
+<li><strong>Node.js</strong>: A high-performance runtime environment built on Chrome&#39;s V8 JavaScript engine. Its non-blocking, event-driven I/O model makes it highly efficient for handling concurrent API requests from multiple frontend clients.</li>
+<li><strong>Express.js</strong>: A minimal and flexible web application framework for Node.js, providing robust features for routing, middleware integration, and RESTful API development.</li>
+<li><strong>MongoDB</strong>: A document-oriented NoSQL database that stores data in flexible, JSON-like documents. This structure maps directly to Javascript objects, simplifying data access and allowing the schema to adapt to changes in manufacturing processes.</li>
+<li><strong>Mongoose ORM</strong>: An Object Data Modeling (ODM) library for MongoDB and Node.js. It provides schema validation, type casting, middleware hooks, and query building to ensure database structure and integrity.</li>
+<li><strong>JWT (JSON Web Token)</strong>: Enforces stateless authentication, allowing users to log in securely and pass signed tokens in the HTTP Authorization headers of API requests.</li>
+</ol>
+<h3>2.5.2 Frontend Technologies</h3>
+<ol>
+<li><strong>React.js</strong>: A component-based frontend library for building dynamic, single-page application (SPA) interfaces. Its virtual DOM diffing algorithm ensures fast rendering of data-dense grids.</li>
+<li><strong>Vite</strong>: A build tool that utilizes native ES modules to deliver fast development server start times and optimized production bundles.</li>
+<li><strong>Tailwind CSS</strong>: A utility-first CSS framework that enables rapid styling directly within markup, facilitating a responsive, mobile-first design for shop-floor tablets.</li>
+<li><strong>React Hook Form &amp; Zod</strong>: Provides schema-based form validation on the client side, ensuring that invalid inputs are caught before they reach the network layer.</li>
+<li><strong>Recharts</strong>: A composable charting library built on React components and SVG, used to render production performance and downtime charts.</li>
+<li><strong>ExcelJS &amp; pdf-lib</strong>: Client-side libraries that generate spreadsheet files (<code>.xlsx</code>) and document sheets (<code>.pdf</code>) directly in the user&#39;s browser, eliminating file compilation overhead on the backend server.</li>
+</ol>
+<style>
+body {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  text-align: justify;
+}
+h1 {
+  font-size: 16pt;
+  text-align: center;
+  page-break-before: always;
+}
+h2, h3, h4 {
+  font-size: 14pt;
+}
+</style><h1>CHAPTER 3: PROPOSED DESIGN &amp; IMPLEMENTATION</h1>
+<h2>3.1 Requirements Analysis</h2>
+<p>To design and build the Smart Production Monitoring System (LineOps), a comprehensive Software Requirement Specification (SRS) was formulated based on manufacturing shop-floor constraints.</p>
+<h3>3.1.1 Functional Requirements</h3>
+<p>The functional requirements define the core actions that the system must support:</p>
+<ul>
+<li><strong>User Authentication</strong>: Secure role-based login (Admin, Supervisor, Operator) using credentials, issuing JSON Web Tokens.</li>
+<li><strong>Master Data Management (MDM)</strong>: Administrators must be able to configure shifts, departments, lines, machines, processes, operators, products, and downtime reasons.</li>
+<li><strong>Dependent Dropdown Validation</strong>: Selection of a Line must filter Machines; selection of a Machine must filter Processes; and selection of a Department must filter Operators.</li>
+<li><strong>Spreadsheet-like Daily Entry</strong>: Operators must be able to log planned targets, hourly production (Hour 1 to Hour 12), rejects, reworks, downtime minutes, and downtime reasons in a grid layout.</li>
+<li><strong>Auto Calculations</strong>: Automatic, instant computation of total production, net production, efficiency, loss, and downtime percentages.</li>
+<li><strong>Record Locking</strong>: Supervisors and Admins must have the authority to lock finalized rows. Admins can unlock locked rows to permit corrections.</li>
+<li><strong>Audit Trails</strong>: Every modification to a production record must append a log detailing the modified field, old value, new value, actor ID, timestamp, and edit reason.</li>
+<li><strong>Report Generation</strong>: Users must be able to filter historic records and export spreadsheets (Excel) and documents (PDF) directly.</li>
+</ul>
+<h3>3.1.2 Non-Functional Requirements</h3>
+<ul>
+<li><strong>Security</strong>: Password hashing using bcryptjs, API rate limiting, Mongoose query filtering, and HTTP token validation.</li>
+<li><strong>Performance &amp; Latency</strong>: API response times under 200ms for CRUD operations.</li>
+<li><strong>Usability</strong>: Responsive, mobile-friendly frontend, supporting numerical input modes (<code>inputMode=&quot;numeric&quot;</code>) for tablet keyboards.</li>
+<li><strong>Reliability &amp; Consistency</strong>: Auto-save drafts every 30 seconds to prevent loss of data due to network disruptions.</li>
+</ul>
+<hr>
+<h2>3.2 System Architecture</h2>
+<p>LineOps is designed around a three-tier architectural pattern consisting of the Client Presentation Layer, the Application Control Layer, and the Database Storage Layer. Figure 3.1 illustrates the high-level block diagram of the system components and their interactions.</p>
+<pre class="mermaid">graph TD
+    subgraph Client Presentation Layer [Client Presentation Layer]
+        ReactApp[React SPA - App.jsx]
+        TailwindCSS[Tailwind CSS Styling]
+        ClientRouter[React Router Client Navigation]
+        ExportEngine[ExcelJS & pdf-lib Export]
+    end
+
+    subgraph Application Control Layer [Application Control Layer]
+        ExpressServer[Express.js Server - index.js]
+        AuthMiddleware[Auth Middleware - auth.js]
+        PermissionCheck[Permissions Middleware - permissions.js]
+        RoutesManager[Routes: auth, users, master, entries, reports, auditLogs, notifications]
+        Helpers[Metrics & Validators helpers.js]
+    end
+
+    subgraph Database Storage Layer [Database Storage Layer]
+        MongooseODM[Mongoose ODM Mapping]
+        MongoDB[(MongoDB Database)]
+    end
+
+    ReactApp -->|HTTP REST Requests + JWT| ExpressServer
+    ExpressServer --> AuthMiddleware
+    AuthMiddleware --> PermissionCheck
+    PermissionCheck --> RoutesManager
+    RoutesManager --> Helpers
+    RoutesManager --> MongooseODM
+    MongooseODM --> MongoDB
+</pre>
+<p><em>Figure 3.1: Block Diagram of LineOps Three-Tier Architecture.</em></p>
+<p>As shown in Figure 3.1, the frontend React application communicates with the Express backend using HTTP requests. Each request carries a JWT in its authorization header. The backend server verifies the token, applies role-based permission checks, processes the request through the designated route handler, performs calculations, and reads or writes data to MongoDB via the Mongoose ODM layer.</p>
+<hr>
+<h2>3.3 Folder Structure of the Repository</h2>
+<p>To maintain clean separation of concerns, the repository is organized into distinct directories for the frontend client and backend server. Figure 3.2 details this layout.</p>
+<pre><code>LineOps/
+â”‚
+â”œâ”€â”€ client/                     # Frontend Application Root
+â”‚   â”œâ”€â”€ public/                 # Static Assets
+â”‚   â”œâ”€â”€ src/                    # React Source Files
+â”‚   â”‚   â”œâ”€â”€ api/                # API client connection utilities (client.js)
+â”‚   â”‚   â”œâ”€â”€ components/         # Reusable UI elements (ErrorDialog, GlobalLoader, Toast)
+â”‚   â”‚   â”œâ”€â”€ hooks/              # Custom React hooks (useAuth, useNotification)
+â”‚   â”‚   â”œâ”€â”€ App.jsx             # Main Application Core (tabs, views, state)
+â”‚   â”‚   â”œâ”€â”€ index.css           # Tailwind CSS directives
+â”‚   â”‚   â””â”€â”€ main.jsx            # Application mount point
+â”‚   â”œâ”€â”€ package.json            # Frontend dependency definitions
+â”‚   â””â”€â”€ vite.config.js          # Vite build configurations
+â”‚
+â””â”€â”€ server/                     # Backend API Root
+    â”œâ”€â”€ src/                    # Backend Source Files
+    â”‚   â”œâ”€â”€ config/             # Constants, environment variables, rate limits
+    â”‚   â”œâ”€â”€ db/                 # DB connections, master inventories, seeders, importers
+    â”‚   â”œâ”€â”€ middleware/         # Auth checkers, CORS configurations, permissions
+    â”‚   â”œâ”€â”€ models/             # Mongoose schemas (index.js: User, MasterItem, ProductionEntry, AuditLog)
+    â”‚   â”œâ”€â”€ routes/             # REST route files (auth, users, master, entries, reports, auditLogs, notifications)
+    â”‚   â”œâ”€â”€ services/           # Business services (auditService.js)
+    â”‚   â”œâ”€â”€ utils/              # Helper calculations, validators
+    â”‚   â””â”€â”€ index.js            # Main server entry and DB bootstrapping
+    â”œâ”€â”€ app.js                  # Server script wrapper
+    â””â”€â”€ package.json            # Backend dependency definitions
+</code></pre>
+<p><em>Figure 3.2: Folder Structure of the LineOps Repository.</em></p>
+<p>The layout described in Figure 3.2 ensures that the frontend and backend layers are self-contained. The React client compiles independently of the Node.js server, allowing for containerized deployments (e.g., using Docker).</p>
+<hr>
+<h2>3.4 Database Design &amp; Entity Relationship Diagram</h2>
+<p>The database layer uses MongoDB to store the application&#39;s data. Mongoose enforce strict validation rules on the collections. Figure 3.3 presents the Entity Relationship Diagram (ERD).</p>
+<pre class="mermaid">erDiagram
+    USER {
+        ObjectId id PK
+        String fullName
+        String employeeId
+        String username UK
+        String passwordHash
+        String role "admin/supervisor/operator"
+        ObjectId assignedDepartment FK
+        ObjectIdArray assignedLines FK
+        String status "active/inactive"
+    }
+
+    MASTER_ITEM {
+        ObjectId id PK
+        String kind "shift/line/operator/machine/process/product/downtime"
+        String name
+        String code
+        Boolean active
+        ObjectId departmentId FK
+        ObjectId lineId FK
+        ObjectId machineId FK
+    }
+
+    PRODUCTION_ENTRY {
+        ObjectId id PK
+        String date
+        ObjectId shiftId FK
+        ObjectId departmentId FK
+        ObjectId lineId FK
+        ObjectId machineId FK
+        ObjectId processId FK
+        ObjectId operatorId FK
+        ObjectId productId FK
+        Number plannedQty
+        String sheetLineNo
+        Number scheduledHours
+        NumberArray hourlyInputs "12 hours array"
+        Number rejectQty
+        Number reworkQty
+        Number downtimeMinutes
+        ObjectId downtimeReasonId FK
+        String downtimeOtherText
+        String remarks
+        String status "draft/submitted/locked"
+        ObjectId createdBy FK
+        ObjectId updatedBy FK
+        StringArray editedCells
+        Array editLogs "array of embedded changes"
+        ObjectId approvedBy FK
+        Number totalProduction
+        Number netProduction
+        Number efficiencyPct
+        Number lossPct
+        Number downtimePct
+    }
+
+    AUDIT_LOG {
+        ObjectId id PK
+        String action
+        String entity
+        String entityId
+        ObjectId actorId FK
+        Object metadata
+    }
+
+    USER ||--o| MASTER_ITEM : "assigned department"
+    USER ||--o{ MASTER_ITEM : "assigned lines"
+    MASTER_ITEM ||--o| MASTER_ITEM : "hierarchical relations"
+    PRODUCTION_ENTRY ||--|| USER : "created by"
+    PRODUCTION_ENTRY ||--|| USER : "updated by"
+    PRODUCTION_ENTRY ||--o| USER : "approved by"
+    PRODUCTION_ENTRY ||--|| MASTER_ITEM : "shift reference"
+    PRODUCTION_ENTRY ||--|| MASTER_ITEM : "line reference"
+    PRODUCTION_ENTRY ||--|| MASTER_ITEM : "machine reference"
+    PRODUCTION_ENTRY ||--|| MASTER_ITEM : "process reference"
+    PRODUCTION_ENTRY ||--|| MASTER_ITEM : "operator reference"
+    AUDIT_LOG ||--|| USER : "acted by"
+</pre>
+<p><em>Figure 3.3: Entity Relationship Diagram (ERD) of LineOps Collections.</em></p>
+<p>The database design shown in Figure 3.3 establishes relationships between the primary collections:</p>
+<ol>
+<li><strong>User</strong>: Represents physical personnel on the shop floor. Operators are linked to their respective departments and supervisors can be assigned to multiple production lines.</li>
+<li><strong>MasterItem</strong>: A unified lookup collection for shifts, lines, machines, processes, operators, products, and downtime reasons. Hierarchical constraints are maintained via self-referencing links: Machines reference their parent Line ID, and Processes reference their parent Machine ID.</li>
+<li><strong>ProductionEntry</strong>: The transactional core, recording daily production figures. It references the required master items and tracks edits via an embedded sub-document array (<code>editLogs</code>).</li>
+<li><strong>AuditLog</strong>: Captures general system operations, mapping actor IDs to actions and affected entities for security auditing.</li>
+</ol>
+<hr>
+<h2>3.5 Operational Workflows and Flowcharts</h2>
+<p>Data consistency on the manufacturing shop floor relies on a structured lifecycle for production entries. Figure 3.4 shows the flowchart for creating, modifying, and locking production records.</p>
+<pre class="mermaid">flowchart TD
+    Start([Operator starts shift]) --> CreateDraft[Create Daily Entry - status: draft]
+    CreateDraft --> AutoSave[Auto-save client-side draft - every 30s]
+    AutoSave --> UserSaveDraft[Operator clicks Save Draft]
+    UserSaveDraft --> DraftState{Status is draft?}
+    
+    DraftState -->|Yes| OperatorEdit[Operator can edit cells without restriction]
+    OperatorEdit --> OperatorSubmit[Operator clicks Submit Entry]
+    OperatorSubmit --> SubmittedState[Status becomes: submitted]
+    
+    SubmittedState --> CanEditCheck{Who is editing?}
+    CanEditCheck -->|Operator| OperatorReason[Requires editing reason - logged in editLogs]
+    CanEditCheck -->|Supervisor / Admin| SupEdit[Can edit directly - logged in editLogs]
+    
+    OperatorReason --> SaveUpdates[Recalculate metrics & Save]
+    SupEdit --> SaveUpdates
+    
+    SaveUpdates --> Review[Supervisor reviews calculations & entries]
+    Review --> Decisions{Approve and finalize?}
+    
+    Decisions -->|No| ReturnEdit[Keep status: submitted for correction]
+    Decisions -->|Yes| LockAction[Supervisor / Admin locks row - status: locked]
+    
+    LockAction --> LockedState[Locked State - No edits allowed by Operator/Supervisor]
+    LockedState --> UnlockRequest{Need correction?}
+    
+    UnlockRequest -->|No| Terminate([End Lifecycle])
+    UnlockRequest -->|Yes| AdminUnlock[Admin unlocks entry - status: submitted]
+    AdminUnlock --> SubmittedState
+</pre>
+<p><em>Figure 3.4: Flowchart of Daily Production Entry Lifecycle.</em></p>
+<p>As detailed in Figure 3.4, a production record starts in a <code>draft</code> state, allowing the operator to save work-in-progress figures. Once submitted, the record transitions to <code>submitted</code>. Any edits made in this state require an explicit reason, which is logged to the database. Finally, supervisors review the metrics and lock the row to prevent unauthorized edits. Only an administrator can unlock a locked record if corrections are required.</p>
+<hr>
+<h2>3.6 Sequence Diagram of Request Lifecycle</h2>
+<p>To illustrate the message passing and security checks, Figure 3.5 outlines the sequence of events when an operator logs in and submits a production entry.</p>
+<pre class="mermaid">sequenceDiagram
+    autonumber
+    actor Operator as Operator Client
+    participant API as Express API Server
+    participant Auth as Auth Middleware
+    participant Model as Mongoose Model
+    participant DB as MongoDB Database
+
+    Operator->>API: POST /api/auth/login (username, password)
+    API->>Model: User.findOne({ username })
+    Model->>DB: Fetch user record
+    DB-->>Model: User data (hashed password)
+    API->>API: bcrypt.compare(password, hash)
+    Note over API: Generate JWT signed with JWT_SECRET
+    API-->>Operator: Return token & sanitized user info
+
+    Operator->>API: POST /api/entries (Entry details + JWT header)
+    API->>Auth: authMiddleware (Verify token)
+    Auth-->>API: Token is valid (Attach req.user)
+    API->>API: calculateMetrics(entry)
+    Note over API: Computes total, net, efficiency, loss, downtime
+    API->>Model: save() productionEntrySchema
+    Model->>DB: Insert Production Entry Document
+    DB-->>Model: Insert confirmed
+    API->>Model: recordAudit('create', 'entry', entryId)
+    Model->>DB: Write Audit Log Document
+    API-->>Operator: HTTP 201 Created (Confirmed Entry)
+</pre>
+<p><em>Figure 3.5: Sequence Diagram of User Authentication and Production Submission.</em></p>
+<p>The workflow shown in Figure 3.5 ensures that:</p>
+<ul>
+<li>User passwords are not stored in plain text.</li>
+<li>Session authorization is validated for every transactional API call.</li>
+<li>Calculations are verified on the backend, preventing client-side manipulations of efficiency values.</li>
+</ul>
+<hr>
+<h2>3.7 Core Algorithms</h2>
+<p>The LineOps system relies on three key algorithmic workflows to manage data and computations.</p>
+<h3>3.7.1 Metrics Calculation Algorithm</h3>
+<p>The metrics helper (<code>server/src/utils/helpers.js</code>) calculates production indices from the hourly input array.</p>
+<p>$$\text{Total Production} = \sum_{h=1}^{12} \text{hourlyInputs}[h]$$</p>
+<p>$$\text{Net Production} = \max(\text{Total Production} - \text{Reject Qty} - \text{Rework Qty}, 0)$$</p>
+<p>$$\text{Efficiency %} = \begin{cases} 
+\left( \frac{\text{Net Production}}{\text{Planned Qty}} \right) \times 100 &amp; \text{if Planned Qty} &gt; 0 \
+0 &amp; \text{if Planned Qty} = 0 
+\end{cases}$$</p>
+<p>$$\text{Loss %} = \begin{cases} 
+\left( \frac{\text{Planned Qty} - \text{Net Production}}{\text{Planned Qty}} \right) \times 100 &amp; \text{if Planned Qty} &gt; 0 \
+0 &amp; \text{if Planned Qty} = 0 
+\end{cases}$$</p>
+<p>$$\text{Downtime %} = \left( \frac{\text{Downtime Minutes}}{720} \right) \times 100$$
+<em>(Note: 720 represents the total minutes in a 12-hour monitoring shift).</em></p>
+<h3>3.7.2 Excel Import Algorithm</h3>
+<p>The spreadsheet importer (<code>server/src/db/importExcelWorkbook.js</code>) parses master lists and production entries from sheet names.</p>
+<pre><code>ALGORITHM: ParseExcelWorkbook
+INPUT: File path of Excel workbook (.xlsx)
+OUTPUT: Seeding validation summary JSON
+
+1. Establish connection to MongoDB
+2. Read workbook file using xlsx.readFile()
+3. FOR EACH sheetName in workbook:
+4.     IF sheetName matches regex &quot;DD.MM.YYYY&quot;:
+5.         Parse date string (YYYY-MM-DD)
+6.         Read cell grid rows, skipping header block (rows 1-3)
+7.         FOR EACH row in rows:
+8.             IF row has valid Line, Machine, and Shift data:
+9.                 Upsert Line Master Item
+10.                Upsert Machine Master Item (associated to Line)
+11.                Upsert Process Master Item (associated to Machine)
+12.                Upsert Operator Master Item
+13.                Upsert Shift Master Item
+14.                Initialize ProductionEntry Object
+15.                Populate target, hourly yields, rejects, and reworks
+16.                Calculate metrics (Total, Net, Efficiency, Loss, Downtime)
+17.                Save production entry to MongoDB database
+18.            END IF
+19.        END FOR
+20.    END IF
+21. END FOR
+22. Return confirmation summary
+</code></pre>
+<h3>3.7.3 Audit Log Insertion</h3>
+<p>Whenever an update request (<code>PUT /api/entries/:id</code>) is made, the controller compares the existing document properties against the request body. If changes are detected, it builds an array of changes. For each modified field, it appends a sub-document with the following structure:</p>
+<pre><code class="language-json">{
+  &quot;field&quot;: &quot;plannedQty&quot;,
+  &quot;oldValue&quot;: 500,
+  &quot;newValue&quot;: 600,
+  &quot;editedBy&quot;: &quot;603d2e92c2df6b15e4a8b792&quot;,
+  &quot;editedAt&quot;: &quot;2026-07-12T13:20:00.000Z&quot;,
+  &quot;reason&quot;: &quot;Target adjusted due to component material availability&quot;
+}
+</code></pre>
+<p>This tracking is saved directly within the production entry document, ensuring that the audit history remains linked to the record it describes.</p>
+<style>
+body {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  text-align: justify;
+}
+h1 {
+  font-size: 16pt;
+  text-align: center;
+  page-break-before: always;
+}
+h2, h3, h4 {
+  font-size: 14pt;
+}
+</style><h1>CHAPTER 4: RESULTS, TESTING &amp; ANALYSIS</h1>
+<h2>4.1 Testing Strategy</h2>
+<p>To verify the stability, security, and correctness of the LineOps Smart Production Monitoring System, a structured testing plan was executed. This strategy included unit testing, integration testing, API validation testing, and security checks.</p>
+<h3>4.1.1 Unit Testing</h3>
+<p>Unit tests focus on verifying the core mathematical helper functions and validation logic in isolation. Because the backend server specifies a test runner script (<code>&quot;test&quot;: &quot;node --test&quot;</code>), tests are executed using Node.js&#39;s native test runner framework.</p>
+<ul>
+<li><strong>Metric Calculations</strong>: Verification that <code>calculateMetrics</code> returns correct values for total production, net production, efficiency, loss, and downtime percentages, including edge cases (e.g., when the planned quantity is zero or when hourly yields exceed planned targets).</li>
+<li><strong>Validators</strong>: Verifying that Object ID formats, date strings, and master kinds are verified before database queries are made.</li>
+</ul>
+<h3>4.1.2 Integration Testing</h3>
+<p>Integration testing evaluates the interactions between different modules, such as routing, database connections, and authentication checks.</p>
+<ul>
+<li><strong>Session Middleware</strong>: Ensuring that requests to protected endpoints (like <code>/api/entries</code>) are rejected with an HTTP 401 Unauthorized status when no token is present, and with an HTTP 403 Forbidden status when an operator attempts to access admin-only functions.</li>
+<li><strong>Dependent Masters Hierarchy</strong>: Verifying that when a machine is created, it is linked to a valid line, and when a production entry is recorded, the machine and process references match this hierarchy.</li>
+</ul>
+<h3>4.1.3 API Validation &amp; Exception Testing</h3>
+<ul>
+<li><strong>Zod Schema Checks</strong>: The client-side forms use Zod schemas to ensure that input formats are correct (e.g., employee IDs must follow alphanumeric conventions and hourly inputs must contain exactly 12 values).</li>
+<li><strong>Error Boundaries</strong>: Ensuring the Express backend catches errors and returns a structured JSON message (<code>{ &quot;error&quot;: &quot;Error message&quot; }</code>) with appropriate HTTP status codes (e.g., 400 for bad requests, 404 for missing resources, and 500 for internal errors), rather than exposing raw stack traces.</li>
+</ul>
+<hr>
+<h2>4.2 Test Cases and Validation Matrix</h2>
+<p>Table 4.1 presents the realistic test cases executed to validate the system, covering authentication, data entry, validation, security, and exports.</p>
+<h3>Table 4.1: System Validation and Test Cases</h3>
+<table>
+<thead>
+<tr>
+<th>Test ID</th>
+<th>Test Description</th>
+<th>Input Conditions</th>
+<th>Expected Output</th>
+<th>Observed Output</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>TC-01</strong></td>
+<td>User Authentication (Success)</td>
+<td>Username: <code>admin</code>, Password: <code>Admin@123</code></td>
+<td>JWT generated; User redirected to dashboard</td>
+<td>JWT generated; User redirected to dashboard</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><strong>TC-02</strong></td>
+<td>User Authentication (Failure)</td>
+<td>Username: <code>operator</code>, Password: <code>WrongPassword</code></td>
+<td>HTTP 401 response; &quot;Invalid credentials&quot; error</td>
+<td>HTTP 401 response; &quot;Invalid credentials&quot; error</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><strong>TC-03</strong></td>
+<td>Auto calculations check</td>
+<td>Planned Qty: <code>100</code>; Hourly inputs: <code>[5,5,5,5,5,5,5,5,5,5,5,5]</code> (Total 60); Rejects: <code>5</code>, Reworks: <code>5</code></td>
+<td>Net: <code>50</code>, Efficiency: <code>50%</code>, Loss: <code>50%</code>, Downtime: <code>0%</code></td>
+<td>Net: <code>50</code>, Efficiency: <code>50.00%</code>, Loss: <code>50.00%</code>, Downtime: <code>0.00%</code></td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><strong>TC-04</strong></td>
+<td>Role-based restriction</td>
+<td>Operator tries to access <code>GET /api/users</code></td>
+<td>HTTP 403 Forbidden response; &quot;Access denied&quot; error</td>
+<td>HTTP 403 Forbidden response; &quot;Access denied&quot; error</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><strong>TC-05</strong></td>
+<td>Dependent validation checking</td>
+<td>Try to post entry with Line <code>L1</code> but Machine <code>L2-FLARING</code></td>
+<td>HTTP 400 Bad Request; invalid reference mapping</td>
+<td>HTTP 400 Bad Request; invalid reference mapping</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><strong>TC-06</strong></td>
+<td>Audit Log triggering</td>
+<td>Edit <code>plannedQty</code> from <code>100</code> to <code>200</code> with reason: &quot;Target updated&quot;</td>
+<td>Log entry created containing old: <code>100</code>, new: <code>200</code>, and the reason</td>
+<td>Log entry created containing old: <code>100</code>, new: <code>200</code>, and the reason</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><strong>TC-07</strong></td>
+<td>Draft Auto-save trigger</td>
+<td>30 seconds pass without manual save on entry grid</td>
+<td>Draft saved to browser LocalStorage/Session</td>
+<td>Draft successfully written to local browser cache</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><strong>TC-08</strong></td>
+<td>Record locking action</td>
+<td>Supervisor locks entry with ID <code>603d2...</code></td>
+<td>Entry status becomes <code>locked</code>; PUT operations reject with HTTP 403</td>
+<td>Entry status becomes <code>locked</code>; PUT operations reject with HTTP 403</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><strong>TC-09</strong></td>
+<td>Excel Export</td>
+<td>Click &quot;Export to Excel&quot; on reports page</td>
+<td>Browser downloads valid <code>.xlsx</code> spreadsheet matching filters</td>
+<td>Browser downloads valid <code>.xlsx</code> spreadsheet matching filters</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td><strong>TC-10</strong></td>
+<td>Bulk Import from workbook</td>
+<td>Upload Excel file with daily entries</td>
+<td>Server parses sheets, seeds 30+ records, updates masters</td>
+<td>Server parses sheets, seeds 30+ records, updates masters</td>
+<td>PASS</td>
+</tr>
+</tbody></table>
+<p>As shown in Table 4.1, all executed test cases returned the expected outputs. This confirms that the system maintains data integrity and enforces security boundaries under standard operating conditions.</p>
+<hr>
+<h2>4.3 Results &amp; User Interface Analysis</h2>
+<p>The user interface of the LineOps system is structured as a single-page application (SPA) divided into tabs. These tabs adapt dynamically based on the logged-in user&#39;s role (Admin, Supervisor, or Operator).</p>
+<h3>4.3.1 Login Interface</h3>
+<p>The login screen provides a clean, secure entry point for users. It contains input fields for the username and employee credentials, a submit button, and a visual toggle for dark and light modes. The layout is optimized to display nicely on both desktop monitors and hand-held barcode scanner terminals.</p>
+<pre><code>+-------------------------------------------------------------------+
+|                        [INSERT LOGO HERE]                         |
+|                             LINEOPS                               |
+|              Smart Production Monitoring System                   |
+|                                                                   |
+|   Username:    [ admin                                        ]   |
+|   Password:    [ *************                                ]   |
+|                                                                   |
+|   [ Login Button ]                      [ ] Enable Dark Mode      |
++-------------------------------------------------------------------+
+</code></pre>
+<p><em>Figure 4.1: Visual layout placeholder for the Login Screen.</em></p>
+<h3>4.3.2 Production Dashboard View</h3>
+<p>The dashboard serves as the main page for supervisors and administrators, providing high-level analytics on shop-floor performance. It contains card widgets displaying total active users, master data items, total daily entries, and efficiency metrics. A key component of this view is a Recharts-based area chart showing line-by-line efficiency trends.</p>
+<pre><code>+-------------------------------------------------------------------+
+|  [Daily Entries: 25]  [Active Lines: 5]  [Avg Efficiency: 84%]    |
+|                                                                   |
+|  Efficiency Trend Analysis Chart (Line-wise)                      |
+|  Efficiency (%)                                                   |
+|   100% |        /\      /\                                        |
+|    80% |   ____/  \____/  \____                                   |
+|    60% |  /                    \                                  |
+|        +----------------------------------------                  |
+|          Line 1  Line 2  Line 3  Line 4  Line 5                   |
++-------------------------------------------------------------------+
+</code></pre>
+<p><em>Figure 4.2: Visual layout placeholder for the Analytics Dashboard.</em></p>
+<h3>4.3.3 Daily Spreadsheet Grid Entry</h3>
+<p>The spreadsheet grid is the primary screen for operators. It allows direct, cell-by-cell editing of hourly production values. Unsaved changes are visually highlighted with a yellow border, draft rows display a folder icon, and locked records show a padlock symbol. The grid supports horizontal scrolling on mobile devices, ensuring usability across different form factors.</p>
+<pre><code>+-------------------------------------------------------------------+
+| Date: [ 2026-07-12 ]   Shift: [ Morning ]   [ Clone Prev Day ]    |
+|                                                                   |
+| Line | Machine | Process | Operator | Target | H1-H12 | Rej | Status|
+| -----+---------+---------+----------+--------+--------+-----+-------|
+| L1   | Lathe   | Grooving| Operator1|  500   | [grid] |  2  | Draft |
+| L1   | Flaring | Flaring | Operator2|  450   | [grid] |  0  | Locked|
+|                                                                   |
+| [Save Draft]         [Submit Production Entry]         [Undo Edit]|
++-------------------------------------------------------------------+
+</code></pre>
+<p><em>Figure 4.3: Visual layout placeholder for the Spreadsheet Data Entry Grid.</em></p>
+<h3>4.3.4 Master Data Configuration View</h3>
+<p>This view allows administrators to configure dropdown lists and master tables. It features a file dropzone where users can upload excel workbooks for bulk imports, alongside standard controls for adding, editing, and disabling shifts, lines, machines, processes, operators, products, and downtime reasons.</p>
+<pre><code>+-------------------------------------------------------------------+
+|  Manage Masters: [ Shifts | Lines | Machines | Processes | Ops ]  |
+|  [ Add Master Item ]                                              |
+|                                                                   |
+|  Bulk Excel Master Import                                         |
+|  +-------------------------------------------------------------+  |
+|  |           Drag &amp; Drop Daily Monitoring Excel Here           |  |
+|  |                     - OR - [ Browse File ]                  |  |
+|  +-------------------------------------------------------------+  |
++-------------------------------------------------------------------+
+</code></pre>
+<p><em>Figure 4.4: Visual layout placeholder for the Master Data Configuration.</em></p>
+<h3>4.3.5 System Audit Trail Log</h3>
+<p>The audit trail screen displays system modifications, allowing supervisors and administrators to track changes. Users can filter logs by entity, date, and user. The log table displays the timestamp, user details, action performed, field modified, old and new values, and the change reason.</p>
+<pre><code>+-------------------------------------------------------------------+
+| Filter Entity: [ Entry  v ]   Search Actor: [ SupervisorName    ] |
+|                                                                   |
+| Timestamp           | Actor  | Action | Field | Old  | New  |Reason|
+| --------------------+--------+--------+-------+------+------+------|
+| 2026-07-12 18:50:00 | Sup_02 | Update |Target | 400  | 450  |Adj.  |
+| 2026-07-12 18:52:12 | Op_04  | Create | Entry | -    | -    |New   |
++-------------------------------------------------------------------+
+</code></pre>
+<p><em>Figure 4.5: Visual layout placeholder for the System Audit Trail Log.</em></p>
+<hr>
+<h2>4.4 Operational Analysis and Advantages</h2>
+<p>The transition from local Excel sheets to the LineOps web platform yielded several operational benefits:</p>
+<ol>
+<li><strong>Elimination of Data Entry Conflicts</strong>: Storing data in MongoDB with document-level locking resolved the file-sharing conflicts common to Excel.</li>
+<li><strong>Immediate KPI Awareness</strong>: Real-time metric calculations on the server enabled instant OEE, efficiency, and downtime reporting for supervisors, replacing manual calculations.</li>
+<li><strong>Improved Regulatory Compliance</strong>: The audit log system provides a secure record of all modifications. Because operators cannot edit historical entries without providing a reason and supervisor approval, data tampering risks are minimized.</li>
+<li><strong>Enhanced Data Quality</strong>: Validation using dependent dropdowns and Zod constraints prevented the entry of invalid machine-process combinations, reducing database cleanup and correction overhead.</li>
+</ol>
+<style>
+body {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  text-align: justify;
+}
+h1 {
+  font-size: 16pt;
+  text-align: center;
+  page-break-before: always;
+}
+h2, h3, h4 {
+  font-size: 14pt;
+}
+</style><h1>CHAPTER 5: CONCLUSION &amp; FUTURE SCOPE</h1>
+<h2>5.1 Future Scope of the Research</h2>
+<p>While the LineOps Smart Production Monitoring System successfully replaces manual spreadsheet entry and establishes database validation for manufacturing parameters, it represents the foundational phase of a larger industrial monitoring system. For a dual-degree program in the Internet of Things (IoT), the long-term goal is to transition from manual, operator-entered logs to automated, sensor-driven machine telemetry.</p>
+<h3>5.1.1 IoT Sensor and Hardware Integration</h3>
+<p>The database schema and API structure of LineOps are designed to accommodate sensor-driven updates. Future hardware integrations can automate data collection:</p>
+<ol>
+<li><strong>Production Counting</strong>: Installing infrared photoelectric beam sensors or inductive proximity switches on conveyor lines to count items automatically. These sensor nodes, controlled by ESP32 or Raspberry Pi edge devices, can send count updates to the <code>/api/entries/:id</code> endpoint via HTTP POST or MQTT protocols.</li>
+<li><strong>Automated Downtime Detection</strong>: Connecting current-transformer (CT) clamp sensors to machine power lines. When current consumption drops below a set threshold, the edge system can log a downtime event, recording start and end times to the database.</li>
+<li><strong>Machine Health and Vibration Monitoring</strong>: Integrating accelerometer sensors (e.g., ADXL345) on rotating machinery to stream vibration data to an edge gateway. This data can help establish baseline profiles and warn supervisors of potential machine failures.</li>
+</ol>
+<pre class="mermaid">graph LR
+    subgraph Shop Floor Hardware [Shop Floor Hardware]
+        IR[Photoelectric Counts]
+        CT[Current Telemetry]
+        Vib[Vibration Node]
+    end
+
+    subgraph Edge Gateway [Edge Gateway]
+        GatewayNode[ESP32 / Raspberry Pi - Node-RED]
+        MQTT[MQTT Broker]
+    end
+
+    subgraph Cloud Server Layer [Cloud Server Layer]
+        API[LineOps Express API]
+        DB[(MongoDB Database)]
+        Dash[React Dashboard]
+    end
+
+    IR -->|GPIO Counts| GatewayNode
+    CT -->|Analog Current Signal| GatewayNode
+    Vib -->|I2C Vibration Data| GatewayNode
+    GatewayNode -->|Publish MQTT Messages| MQTT
+    MQTT -->|REST HTTP / WebSocket POST| API
+    API -->|Write to Collections| DB
+    API -->|Real-Time Push| Dash
+</pre>
+<p><em>Figure 5.1: Proposed IoT Hardware Data Ingestion Architecture.</em></p>
+<p>The architecture in Figure 5.1 illustrates the planned path for hardware integration. Utilizing edge gateways, the system can reduce manual entry requirements, minimizing typing delays and human errors.</p>
+<h3>5.1.2 Real-time Messaging and WebSockets</h3>
+<p>Implementing WebSockets (via Socket.io) would allow the backend to stream live updates to the frontend client without constant page reloading. This capability would enable:</p>
+<ul>
+<li><strong>Instant Missed Entry Alerts</strong>: Notifying supervisors immediately if an operator fails to log production data during a shift.</li>
+<li><strong>Downtime Notifications</strong>: Triggering mobile push notifications or automated emails to maintenance engineers when a machine enters an unplanned downtime state.</li>
+</ul>
+<h3>5.1.3 AI-driven Analytics and Predictive Maintenance</h3>
+<p>Accumulating continuous production data in MongoDB allows for the integration of analytical models:</p>
+<ul>
+<li><strong>Anomaly Detection</strong>: Using machine learning algorithms to spot unusual yield declines or unexpected increases in reject rates.</li>
+<li><strong>Predictive Maintenance</strong>: Analyzing vibration, temperature, and historical breakdown patterns to estimate when a machine might require maintenance, allowing teams to schedule service before a failure occurs.</li>
+</ul>
+<hr>
+<h2>5.2 Concluding Remarks</h2>
+<p>The LineOps Smart Production Monitoring System presents a practical, secure, and user-friendly solution to the data entry challenges faced by manufacturing SMEs. By replacing local, error-prone spreadsheets with a centralized, role-based web application, the platform secures shop-floor data and provides visibility into operational performance.</p>
+<p>The system meets its primary design objectives:</p>
+<ul>
+<li><strong>User Roles &amp; Security</strong>: Handled via JWT authentication and bcrypt password hashing.</li>
+<li><strong>Data Entry</strong>: Streamlined through an interactive, spreadsheet-like editing grid with auto-save draft functionality.</li>
+<li><strong>Automated Metric Calculations</strong>: Computes KPIs (net production, efficiency, and loss percentages) instantly on the backend.</li>
+<li><strong>Compliance &amp; Transparency</strong>: Maintained through an automatic edit logging service that records all modifications.</li>
+</ul>
+<p>Furthermore, within an IoT curriculum, LineOps serves as the structural foundation for building cyber-physical manufacturing systems. By organizing shop-floor entities (lines, machines, and processes) into a clean, relational model, the application provides the database and API framework needed to ingest and contextualize raw sensor telemetry. This digital foundation is key to enabling smarter, automated, and more efficient manufacturing environments.</p>
+<style>
+body {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  text-align: justify;
+}
+h1 {
+  font-size: 16pt;
+  text-align: center;
+  page-break-before: always;
+}
+h2, h3, h4 {
+  font-size: 14pt;
+}
+</style><h1>REFERENCES</h1>
+<p>[1] L. D. Xu, E. L. Xu, and L. Li, &quot;Industry 4.0: State of the art and future trends,&quot; <em>International Journal of Production Research</em>, vol. 56, no. 8, pp. 2941â€“2962, 2018.</p>
+<p>[2] E. Sisinni, A. G. Saifullah, S. Han, U. Jennehag, and M. Gidlund, &quot;Industrial Internet of Things: Challenges, opportunities, and directions,&quot; <em>IEEE Transactions on Industrial Informatics</em>, vol. 14, no. 11, pp. 4724â€“4734, 2018.</p>
+<p>[3] J. P. Womack, D. T. Jones, and D. Roos, <em>The Machine That Changed the World: The Story of Lean Production</em>. New York: HarperPerennial, 1991.</p>
+<p>[4] S. Nakajima, <em>Introduction to TPM: Total Productive Maintenance</em>. Cambridge, MA: Productivity Press, 1988.</p>
+<p>[5] R. Ramakrishnan and J. Gehrke, <em>Database Management Systems</em>, 3rd ed. Boston, MA: McGraw-Hill, 2003.</p>
+<p>[6] P. Raj and L. D. Raman, <em>Architecting the Internet of Things</em>. New York, NY: Springer, 2017.</p>
+<p>[7] M. Fowler, <em>Patterns of Enterprise Application Architecture</em>. Boston, MA: Addison-Wesley, 2002.</p>
+<p>[8] D. Flanagan, <em>JavaScript: The Definitive Guide</em>, 7th ed. Sebastopol, CA: O&#39;Reilly Media, 2020.</p>
+<p>[9] MongoDB Inc., &quot;MongoDB Manual - Indexes and Performance Optimization,&quot; [Online]. Available: <a href="https://www.mongodb.com/docs/manual/indexes/">https://www.mongodb.com/docs/manual/indexes/</a>. [Accessed: Jul. 12, 2026].</p>
+<p>[10] Facebook Open Source, &quot;React Documentation - State Management and Component Lifecycle,&quot; [Online]. Available: <a href="https://react.dev/reference/react">https://react.dev/reference/react</a>. [Accessed: Jul. 12, 2026].</p>
+<p>[11] World Wide Web Consortium (W3C), &quot;Securing APIs and stateless authentication standard guidelines,&quot; [Online]. Available: <a href="https://www.w3.org/TR/api-security/">https://www.w3.org/TR/api-security/</a>. [Accessed: Jul. 12, 2026].</p>
+<p>[12] Node.js Foundation, &quot;Node.js v20.x Native Test Runner API Documentation,&quot; [Online]. Available: <a href="https://nodejs.org/api/test.html">https://nodejs.org/api/test.html</a>. [Accessed: Jul. 12, 2026].</p>
+<style>
+body {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  text-align: justify;
+}
+h1 {
+  font-size: 16pt;
+  text-align: center;
+  page-break-before: always;
+}
+h2, h3, h4 {
+  font-size: 14pt;
+}
+</style><h1>APPENDIX</h1>
+<h2>A.1 System Installation and Deployment</h2>
+<p>The LineOps system is configured as a decoupled web application. The frontend client builds into static HTML/JS/CSS assets via Vite, and the backend Express server operates as a stateless API service.</p>
+<h3>A.1.1 Installation Prerequisites</h3>
+<ul>
+<li><strong>Runtime Environment</strong>: Node.js (v18.x or later) and npm (v9.x or later) installed locally.</li>
+<li><strong>Database Server</strong>: MongoDB Community Server installed locally (port 27017) or a MongoDB Atlas cloud instance.</li>
+</ul>
+<h3>A.1.2 Backend Deployment Steps</h3>
+<ol>
+<li>Navigate to the server folder:<pre><code class="language-bash">cd server
+</code></pre>
+</li>
+<li>Install npm dependencies:<pre><code class="language-bash">npm install
+</code></pre>
+</li>
+<li>Create a <code>.env</code> configuration file in the server root:<pre><code class="language-env">PORT=5000
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DB_NAME=lineops
+FRONTEND_URL=http://localhost:5173
+JWT_SECRET=production_secure_jwt_token_secret_key_123!
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=Admin@123
+</code></pre>
+</li>
+<li>Start the server (deploys database seed data and runs synchronization on startup):<pre><code class="language-bash">npm start
+</code></pre>
+</li>
+</ol>
+<h3>A.1.3 Frontend Deployment Steps</h3>
+<ol>
+<li>Navigate to the client folder:<pre><code class="language-bash">cd client
+</code></pre>
+</li>
+<li>Install npm dependencies:<pre><code class="language-bash">npm install
+</code></pre>
+</li>
+<li>Create a <code>.env</code> file in the client root:<pre><code class="language-env">VITE_API_BASE_URL=http://localhost:5000
+</code></pre>
+</li>
+<li>Run the local Vite development server:<pre><code class="language-bash">npm run dev
+</code></pre>
+</li>
+<li>Building the production bundle:<pre><code class="language-bash">npm run build
+</code></pre>
+<em>(This outputs static assets to <code>client/dist</code>, ready to be served by web engines like Nginx or Apache).</em></li>
+</ol>
+<hr>
+<h2>A.2 Complete Rest API Endpoint Listing</h2>
+<p>Table A.1 lists the REST API routes available in the LineOps Express application.</p>
+<h3>Table A.1: API Endpoints Reference</h3>
+<table>
+<thead>
+<tr>
+<th>HTTP Method</th>
+<th>Route Endpoint</th>
+<th>Role Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>POST</strong></td>
+<td><code>/api/auth/login</code></td>
+<td>Public</td>
+<td>Validates credentials; returns signed JWT.</td>
+</tr>
+<tr>
+<td><strong>GET</strong></td>
+<td><code>/api/auth/me</code></td>
+<td>Operator, Supervisor, Admin</td>
+<td>Returns current authenticated user object.</td>
+</tr>
+<tr>
+<td><strong>GET</strong></td>
+<td><code>/api/users</code></td>
+<td>Admin</td>
+<td>Lists all user accounts registered in database.</td>
+</tr>
+<tr>
+<td><strong>POST</strong></td>
+<td><code>/api/users</code></td>
+<td>Admin</td>
+<td>Creates a user account with role/department.</td>
+</tr>
+<tr>
+<td><strong>PUT</strong></td>
+<td><code>/api/users/:id</code></td>
+<td>Admin</td>
+<td>Updates user properties (role, lines, status).</td>
+</tr>
+<tr>
+<td><strong>POST</strong></td>
+<td><code>/api/users/:id/reset-password</code></td>
+<td>Admin</td>
+<td>Resets target user&#39;s password.</td>
+</tr>
+<tr>
+<td><strong>GET</strong></td>
+<td><code>/api/master/:kind</code></td>
+<td>Operator, Supervisor, Admin</td>
+<td>Retrieves active master items (shifts, lines, etc.).</td>
+</tr>
+<tr>
+<td><strong>POST</strong></td>
+<td><code>/api/master/:kind</code></td>
+<td>Admin</td>
+<td>Creates a master item.</td>
+</tr>
+<tr>
+<td><strong>PUT</strong></td>
+<td><code>/api/master/:kind/:id</code></td>
+<td>Admin</td>
+<td>Updates a master item&#39;s fields or active status.</td>
+</tr>
+<tr>
+<td><strong>DELETE</strong></td>
+<td><code>/api/master/:kind/:id</code></td>
+<td>Admin</td>
+<td>Deletes a master item.</td>
+</tr>
+<tr>
+<td><strong>POST</strong></td>
+<td><code>/api/master/import</code></td>
+<td>Admin</td>
+<td>Bulk-imports master records via JSON array.</td>
+</tr>
+<tr>
+<td><strong>GET</strong></td>
+<td><code>/api/entries</code></td>
+<td>Operator, Supervisor, Admin</td>
+<td>Lists production logs matching filters (date, line).</td>
+</tr>
+<tr>
+<td><strong>POST</strong></td>
+<td><code>/api/entries</code></td>
+<td>Operator, Supervisor, Admin</td>
+<td>Creates a production entry document.</td>
+</tr>
+<tr>
+<td><strong>PUT</strong></td>
+<td><code>/api/entries/:id</code></td>
+<td>Operator, Supervisor, Admin</td>
+<td>Edits entry details and appends to <code>editLogs</code>.</td>
+</tr>
+<tr>
+<td><strong>DELETE</strong></td>
+<td><code>/api/entries/:id</code></td>
+<td>Admin</td>
+<td>Deletes a production entry document.</td>
+</tr>
+<tr>
+<td><strong>POST</strong></td>
+<td><code>/api/entries/:id/lock</code></td>
+<td>Admin</td>
+<td>Locks entry to prevent further modifications.</td>
+</tr>
+<tr>
+<td><strong>POST</strong></td>
+<td><code>/api/entries/:id/unlock</code></td>
+<td>Admin</td>
+<td>Unlocks entry to allow corrections.</td>
+</tr>
+<tr>
+<td><strong>POST</strong></td>
+<td><code>/api/entries/clone-previous</code></td>
+<td>Operator, Supervisor, Admin</td>
+<td>Clones previous-day setup for current date.</td>
+</tr>
+<tr>
+<td><strong>GET</strong></td>
+<td><code>/api/reports</code></td>
+<td>Operator, Supervisor, Admin</td>
+<td>Retrieves aggregated monitoring report.</td>
+</tr>
+<tr>
+<td><strong>GET</strong></td>
+<td><code>/api/audit-logs</code></td>
+<td>Supervisor, Admin</td>
+<td>Retrieves system audit trails.</td>
+</tr>
+<tr>
+<td><strong>GET</strong></td>
+<td><code>/api/notifications/missed-entries</code></td>
+<td>Supervisor, Admin</td>
+<td>Identifies active operators with missing entries today.</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>A.3 Critical Code Snippets</h2>
+<h3>A.3.1 KPI Metrics Calculations (<code>server/src/utils/helpers.js</code>)</h3>
+<pre><code class="language-javascript">export const calculateMetrics = (entry) =&gt; {
+  const totalProduction = (entry.hourlyInputs || []).reduce((sum, n) =&gt; sum + Number(n || 0), 0);
+  const netProduction = Math.max(
+    totalProduction - Number(entry.rejectQty || 0) - Number(entry.reworkQty || 0),
+    0
+  );
+  const target = Number(entry.plannedQty || 0);
+  const efficiencyPct = target &gt; 0 ? (netProduction / target) * 100 : 0;
+  const lossPct = target &gt; 0 ? ((target - netProduction) / target) * 100 : 0;
+  const downtimePct = 720 &gt; 0 ? (Number(entry.downtimeMinutes || 0) / 720) * 100 : 0;
+  
+  return {
+    totalProduction,
+    netProduction,
+    efficiencyPct: Number(efficiencyPct.toFixed(2)),
+    lossPct: Number(lossPct.toFixed(2)),
+    downtimePct: Number(downtimePct.toFixed(2)),
+  };
+};
+</code></pre>
+<h3>A.3.2 Production Entry Schema with Audit Log (<code>server/src/models/index.js</code>)</h3>
+<pre><code class="language-javascript">export const editLogSchema = new mongoose.Schema(
+  {
+    field: { type: String, required: true },
+    oldValue: { type: mongoose.Schema.Types.Mixed },
+    newValue: { type: mongoose.Schema.Types.Mixed },
+    editedBy: { type: mongoose.Schema.Types.ObjectId, ref: &#39;User&#39;, required: true },
+    editedAt: { type: Date, default: Date.now },
+    reason: { type: String, default: &#39;&#39; },
+  },
+  { _id: false }
+);
+
+export const productionEntrySchema = new mongoose.Schema(
+  {
+    date: { type: String, required: true },
+    shiftId: { type: mongoose.Schema.Types.ObjectId, ref: &#39;MasterItem&#39;, required: true },
+    lineId: { type: mongoose.Schema.Types.ObjectId, ref: &#39;MasterItem&#39;, required: true },
+    machineId: { type: mongoose.Schema.Types.ObjectId, ref: &#39;MasterItem&#39;, required: true },
+    processId: { type: mongoose.Schema.Types.ObjectId, ref: &#39;MasterItem&#39;, required: true },
+    operatorId: { type: mongoose.Schema.Types.ObjectId, ref: &#39;MasterItem&#39;, required: true },
+    plannedQty: { type: Number, required: true, min: 0 },
+    hourlyInputs: {
+      type: [Number],
+      validate: {
+        validator: (v) =&gt; Array.isArray(v) &amp;&amp; v.length === 12,
+        message: &#39;hourlyInputs must contain 12 values&#39;,
+      },
+      required: true,
+    },
+    rejectQty: { type: Number, default: 0, min: 0 },
+    reworkQty: { type: Number, default: 0, min: 0 },
+    downtimeMinutes: { type: Number, default: 0, min: 0 },
+    status: { type: String, enum: [&#39;draft&#39;, &#39;submitted&#39;, &#39;locked&#39;], default: &#39;draft&#39; },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: &#39;User&#39;, required: true },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: &#39;User&#39;, required: true },
+    editLogs: [editLogSchema],
+    totalProduction: { type: Number, default: 0 },
+    netProduction: { type: Number, default: 0 },
+    efficiencyPct: { type: Number, default: 0 },
+    lossPct: { type: Number, default: 0 },
+    downtimePct: { type: Number, default: 0 },
+  },
+  { timestamps: true }
+);
+</code></pre>
+<h3>A.3.3 API Update Route with Audit Check (<code>server/src/routes/entries.js</code>)</h3>
+<pre><code class="language-javascript">router.put(&#39;/:id&#39;, authMiddleware, requireRole(&#39;admin&#39;, &#39;supervisor&#39;, &#39;operator&#39;), async (req, res) =&gt; {
+  const entry = await ProductionEntry.findById(req.params.id);
+  if (!entry) return res.status(404).json({ error: &#39;Entry not found.&#39; });
+
+  if (!canEditEntry(req.user, entry)) {
+    return res.status(403).json({ error: &#39;You cannot edit this entry.&#39; });
+  }
+
+  const editableFields = [&#39;plannedQty&#39;, &#39;hourlyInputs&#39;, &#39;rejectQty&#39;, &#39;reworkQty&#39;, &#39;downtimeMinutes&#39;, &#39;remarks&#39;, &#39;status&#39;];
+  const editReason = req.body.editReason || &#39;&#39;;
+  const changedFields = [];
+
+  editableFields.forEach((field) =&gt; {
+    if (req.body[field] !== undefined) {
+      const oldValue = entry[field];
+      const newValue = req.body[field];
+
+      if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+        entry[field] = newValue;
+        changedFields.push(field);
+        entry.editLogs.push({
+          field,
+          oldValue,
+          newValue,
+          editedBy: req.user._id,
+          editedAt: new Date(),
+          reason: editReason,
+        });
+      }
+    }
+  });
+
+  if (changedFields.length &gt; 0) {
+    entry.updatedBy = req.user._id;
+    Object.assign(entry, calculateMetrics(entry));
+    await entry.save();
+    await recordAudit(req.user._id, &#39;update&#39;, &#39;entry&#39;, entry._id, { changedFields, editReason });
+  }
+
+  return res.json(entry);
+});
+</code></pre>
+
+</body>
+</html>
