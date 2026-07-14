@@ -8,9 +8,9 @@ import { MasterItem, ProductionEntry, User } from '../models/index.js';
 import { calculateMetrics, normalizeHourlyInputs } from '../utils/helpers.js';
 
 const DEFAULT_WORKBOOK_PATH =
-  'c:/Users/SSC/OneDrive/Desktop/abcd/Daily Monitoring System Hourly (1) (Autosaved).xlsx';
+  'C:/Users/SSC/OneDrive/Desktop/hydroquipda/Daily Monitoring System Hourly (1) (Autosaved) (1).xlsx';
 
-const WORKBOOK_SOURCE = 'Daily Monitoring System Hourly (1) (Autosaved).xlsx';
+const WORKBOOK_SOURCE = 'Daily Monitoring System Hourly (1) (Autosaved) (1).xlsx';
 const DATE_SHEET_PATTERN = /^(\d{2})\.(\d{2})\.(\d{4})$/;
 
 const cleanText = (value) =>
@@ -49,98 +49,6 @@ const lineDetails = (lineNo) => {
   };
 };
 
-const findMasterByName = (kind, name, parents = {}) =>
-  MasterItem.findOne({
-    kind,
-    name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-    ...parents,
-  }).sort({ active: -1, updatedAt: -1 });
-
-const upsertMaster = async ({ kind, name, code = '', active = true, ...parents }) => {
-  const trimmedName = cleanText(name);
-  if (!trimmedName) return null;
-
-  const query = code
-    ? { kind, code }
-    : {
-        kind,
-        name: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-        ...parents,
-      };
-
-  let doc = await MasterItem.findOne(query).sort({ active: -1, updatedAt: -1 });
-
-  if (!doc && code) {
-    doc = await findMasterByName(kind, trimmedName, parents);
-  }
-
-  if (!doc) {
-    return MasterItem.create({
-      kind,
-      name: trimmedName,
-      code,
-      active,
-      ...parents,
-    });
-  }
-
-  doc.name = trimmedName;
-  doc.code = code || doc.code || '';
-  doc.active = active;
-  Object.assign(doc, parents);
-  return doc.save();
-};
-
-const getShift = async (shiftValue) => {
-  const shiftCode = cleanText(shiftValue).toUpperCase() || 'UNASSIGNED';
-  const shiftName = shiftCode === 'UNASSIGNED' ? 'Unassigned' : `Shift ${shiftCode}`;
-  return upsertMaster({
-    kind: 'shift',
-    name: shiftName,
-    code: shiftCode,
-    active: true,
-  });
-};
-
-const getOperator = async (operatorName) => {
-  const name = cleanText(operatorName) || 'NA';
-  return upsertMaster({
-    kind: 'operator',
-    name,
-    code: `OP-${toCodePart(name, 'NA')}`,
-    active: true,
-  });
-};
-
-const getLine = async (lineNo) => {
-  const details = lineDetails(lineNo);
-  return upsertMaster({
-    kind: 'line',
-    name: details.name,
-    code: details.code,
-    active: true,
-  });
-};
-
-const getMachine = async (lineDoc, machineName) =>
-  upsertMaster({
-    kind: 'machine',
-    name: machineName,
-    code: `${lineDoc.code}-${toCodePart(machineName, 'MACHINE')}`,
-    active: true,
-    lineId: lineDoc._id,
-    departmentId: null,
-  });
-
-const getProcess = async (machineDoc, processName) =>
-  upsertMaster({
-    kind: 'process',
-    name: processName,
-    code: `${machineDoc.code}-${toCodePart(processName, 'PROCESS')}`,
-    active: true,
-    machineId: machineDoc._id,
-  });
-
 const rowHasImportableData = (row) => {
   const hasShift = Boolean(cleanText(row[5]));
   const hasHourly = row.slice(8, 20).some((value) => cleanText(value) !== '');
@@ -177,8 +85,48 @@ const parseProductionRow = (row, sheetName, date, rowNumber) => {
   };
 };
 
+// ---------------------------------------------------------------------------
+// Fast master-item resolution using an in-memory cache.
+// After the DB is wiped we build everything from scratch, so we can keep an
+// authoritative in-memory Map and only hit MongoDB when we need to persist a
+// new document.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a composite cache key.
+ * @param {string} kind
+ * @param {string} code
+ * @returns {string}
+ */
+const masterKey = (kind, code) => `${kind}::${code}`;
+
+/**
+ * Ensure a MasterItem exists, returning its document.
+ * Uses `cache` (Map<string, document>) to avoid redundant DB round-trips.
+ */
+const ensureMaster = async (cache, { kind, name, code, active = true, ...parents }) => {
+  const key = masterKey(kind, code);
+  if (cache.has(key)) return cache.get(key);
+
+  // Not in cache – upsert into DB
+  const doc = await MasterItem.findOneAndUpdate(
+    { kind, code },
+    { $setOnInsert: { kind, name, code, active, ...parents } },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
+
+  cache.set(key, doc);
+  return doc;
+};
+
 const importWorkbook = async (workbookPath) => {
   await ensureDbConnection();
+
+  // Full reset before seeding
+  console.log('Dropping ProductionEntry and MasterItem collections…');
+  await ProductionEntry.deleteMany({});
+  await MasterItem.deleteMany({});
+
   await seedInitialData();
 
   const admin = await User.findOne({ username: ADMIN_USERNAME.toLowerCase() });
@@ -186,6 +134,8 @@ const importWorkbook = async (workbookPath) => {
     throw new Error(`Admin user "${ADMIN_USERNAME}" was not found after seeding.`);
   }
 
+  // ── 1. Parse the workbook ────────────────────────────────────────────────
+  console.log(`Reading workbook: ${workbookPath}`);
   const workbook = xlsx.readFile(workbookPath, { cellDates: true });
   const productionRows = [];
 
@@ -206,18 +156,78 @@ const importWorkbook = async (workbookPath) => {
     });
   }
 
-  await ProductionEntry.deleteMany({ importSource: WORKBOOK_SOURCE });
+  console.log(`Parsed ${productionRows.length} production rows from workbook.`);
 
+  // ── 2. Build master items (cached, no redundant DB trips) ────────────────
+  console.log('Resolving master items…');
+  const cache = new Map();
+
+  // Pre-load any master items already seeded (shifts, operators, etc.)
+  const seeded = await MasterItem.find({});
+  for (const doc of seeded) {
+    if (doc.code) cache.set(masterKey(doc.kind, doc.code), doc);
+  }
+
+  // Resolve per-row masters sequentially (respects parent→child ordering)
+  const resolved = [];
+  for (const row of productionRows) {
+    const { name: lineName, code: lineCode } = lineDetails(row.sheetLineNo);
+    const lineDoc = await ensureMaster(cache, {
+      kind: 'line',
+      name: lineName,
+      code: lineCode,
+      active: true,
+    });
+
+    const machineCode = `${lineDoc.code}-${toCodePart(row.machineName, 'MACHINE')}`;
+    const machineDoc = await ensureMaster(cache, {
+      kind: 'machine',
+      name: row.machineName,
+      code: machineCode,
+      active: true,
+      lineId: lineDoc._id,
+      departmentId: null,
+    });
+
+    const processCode = `${machineDoc.code}-${toCodePart(row.processName, 'PROCESS')}`;
+    const processDoc = await ensureMaster(cache, {
+      kind: 'process',
+      name: row.processName,
+      code: processCode,
+      active: true,
+      machineId: machineDoc._id,
+    });
+
+    const operatorName = cleanText(row.operatorName) || 'NA';
+    const operatorCode = `OP-${toCodePart(operatorName, 'NA')}`;
+    const operatorDoc = await ensureMaster(cache, {
+      kind: 'operator',
+      name: operatorName,
+      code: operatorCode,
+      active: true,
+    });
+
+    const shiftCode = cleanText(row.shiftValue).toUpperCase() || 'UNASSIGNED';
+    const shiftName = shiftCode === 'UNASSIGNED' ? 'Unassigned' : `Shift ${shiftCode}`;
+    const shiftDoc = await ensureMaster(cache, {
+      kind: 'shift',
+      name: shiftName,
+      code: shiftCode,
+      active: true,
+    });
+
+    resolved.push({ row, lineDoc, machineDoc, processDoc, operatorDoc, shiftDoc });
+  }
+
+  console.log(`Master items resolved. Unique items in cache: ${cache.size}`);
+
+  // ── 3. Build ProductionEntry documents and insertMany in batches ─────────
+  console.log('Building and inserting production entries…');
+  const BATCH_SIZE = 500;
   let imported = 0;
   const summary = new Map();
 
-  for (const row of productionRows) {
-    const lineDoc = await getLine(row.sheetLineNo);
-    const machineDoc = await getMachine(lineDoc, row.machineName);
-    const processDoc = await getProcess(machineDoc, row.processName);
-    const operatorDoc = await getOperator(row.operatorName);
-    const shiftDoc = await getShift(row.shiftValue);
-
+  const buildDoc = ({ row, lineDoc, machineDoc, processDoc, operatorDoc, shiftDoc }) => {
     const entry = new ProductionEntry({
       date: row.date,
       shiftId: shiftDoc._id,
@@ -246,11 +256,19 @@ const importWorkbook = async (workbookPath) => {
       editedCells: [],
       editLogs: [],
     });
-
     Object.assign(entry, calculateMetrics(entry));
-    await entry.save();
-    imported += 1;
-    summary.set(row.sheetName, (summary.get(row.sheetName) || 0) + 1);
+    return entry;
+  };
+
+  for (let i = 0; i < resolved.length; i += BATCH_SIZE) {
+    const batch = resolved.slice(i, i + BATCH_SIZE);
+    const docs = batch.map(buildDoc);
+    await ProductionEntry.insertMany(docs, { ordered: false });
+    imported += docs.length;
+    for (const { row } of batch) {
+      summary.set(row.sheetName, (summary.get(row.sheetName) || 0) + 1);
+    }
+    console.log(`  Inserted ${imported} / ${resolved.length} entries…`);
   }
 
   return {

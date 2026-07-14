@@ -102,17 +102,29 @@ router.get('/', authMiddleware, async (req, res) => {
     query.lineId = { $in: req.user.assignedLines };
   }
 
-  const entries = await ProductionEntry.find(query)
-    .populate('shiftId', 'name code')
-    .populate('lineId', 'name code')
-    .populate('machineId', 'name code')
-    .populate('processId', 'name code')
-    .populate('operatorId', 'name code')
-    .sort({ date: -1, createdAt: -1 })
-    .populate('createdBy', 'fullName username')
-    .lean();
+  // ── Pagination ────────────────────────────────────────────────────────────
+  const rawPage = parseInt(req.query.page, 10);
+  const rawLimit = parseInt(req.query.limit, 10);
+  const page = rawPage > 0 ? rawPage : 1;
+  const limit = rawLimit > 0 && rawLimit <= 500 ? rawLimit : 50;
+  const skip = (page - 1) * limit;
 
-  return res.json(entries);
+  const [total, data] = await Promise.all([
+    ProductionEntry.countDocuments(query),
+    ProductionEntry.find(query)
+      .populate('shiftId', 'name code')
+      .populate('lineId', 'name code')
+      .populate('machineId', 'name code')
+      .populate('processId', 'name code')
+      .populate('operatorId', 'name code')
+      .populate('createdBy', 'fullName username')
+      .sort({ date: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
+
+  return res.json({ data, total, page, pages: Math.ceil(total / limit) || 1 });
 });
 
 router.post('/', authMiddleware, requireRole('admin', 'supervisor', 'operator'), async (req, res) => {
