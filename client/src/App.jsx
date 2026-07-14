@@ -1084,11 +1084,14 @@ function App() {
     const query = new URLSearchParams()
     query.set('from', fromVal)
     query.set('to', toVal)
+    query.set('limit', '500') // fetch all entries in range for analytics charts
     try {
-      const data = await authFetch(`/api/entries?${query.toString()}`)
-      setAnalyticsRows(Array.isArray(data) ? data : [])
+      const result = await authFetch(`/api/entries?${query.toString()}`)
+      // API now returns { data, total, page, pages } — extract the array
+      const rows = Array.isArray(result) ? result : (result?.data ?? [])
+      setAnalyticsRows(rows)
       setAnalyticsHasRun(true)
-      showSuccess(`Loaded ${Array.isArray(data) ? data.length : 0} entries for analytics.`)
+      showSuccess(`Loaded ${rows.length} entries for analytics.`)
     } catch (err) {
       showError(err.message, 'Failed to load analytics data')
     }
