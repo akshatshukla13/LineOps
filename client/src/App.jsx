@@ -340,6 +340,10 @@ function App() {
   const [masters, setMasters] = useState({})
   const [users, setUsers] = useState([])
   const [entries, setEntries] = useState([])
+  const [entriesPage, setEntriesPage] = useState(1)
+  const [entriesLimit, setEntriesLimit] = useState(50)
+  const [entriesTotalCount, setEntriesTotalCount] = useState(0)
+  const [entryDateFilter, setEntryDateFilter] = useState('')
   const [entryDraft, setEntryDraft] = useState(emptyEntry)
   const [editingEntryId, setEditingEntryId] = useState(null)
   const [reportFilters, setReportFilters] = useState({
@@ -774,9 +778,13 @@ function App() {
     setMasters(merged)
   }
 
-  const loadEntries = async () => {
-    const data = await authFetch('/api/entries')
-    setEntries(data)
+  const loadEntries = async (page = entriesPage, limit = entriesLimit, dateFilter = entryDateFilter) => {
+    const params = new URLSearchParams({ page, limit })
+    if (dateFilter) params.set('date', dateFilter)
+    const result = await authFetch(`/api/entries?${params.toString()}`)
+    setEntries(result.data ?? [])
+    setEntriesTotalCount(result.total ?? 0)
+    setEntriesPage(result.page ?? 1)
   }
 
   const loadUsers = async () => {
@@ -815,6 +823,8 @@ function App() {
     setUser(null)
     setActiveTab('dashboard')
     setEntries([])
+    setEntriesTotalCount(0)
+    setEntriesPage(1)
     setUsers([])
     setMasters({})
     setMissedEntries([])
@@ -902,13 +912,13 @@ function App() {
     const isLocked = entry.status === 'locked'
     const action = isLocked ? 'unlock' : 'lock'
     try {
-      
       await authFetch(`/api/entries/${entry._id}/${action}`, { method: 'POST' })
       if (editingEntryId === entry._id && !isLocked) {
         setEditingEntryId(null)
         setEntryDraft(emptyEntry())
       }
-      await loadEntries()
+      setEntriesPage(1)
+      await loadEntries(1, entriesLimit, entryDateFilter)
       showSuccess(isLocked ? 'Entry unlocked. Operators can edit again.' : 'Entry locked. Operators cannot edit this record.')
     } catch (error) {
       showError(error.message)
@@ -936,7 +946,8 @@ function App() {
       setQuickReport((current) => current
         ? { ...current, rows: current.rows.filter((row) => String(row.id || row._id || '') !== String(entryId)) }
         : current)
-      await loadEntries()
+      setEntriesPage(1)
+      await loadEntries(1, entriesLimit, entryDateFilter)
       showSuccess('Entry deleted.')
     } catch (error) {
       showError(error.message)
@@ -1002,7 +1013,8 @@ function App() {
 
       setEditingEntryId(null)
       setEntryDraft(emptyEntry())
-      await loadEntries()
+      setEntriesPage(1)
+      await loadEntries(1, entriesLimit, entryDateFilter)
     } catch (error) {
       const message =
         error instanceof z.ZodError
@@ -1796,7 +1808,7 @@ function App() {
             <div className="grid gap-4 md:grid-cols-3">
               <div className="card">
                 <h2 className="text-sm font-semibold uppercase text-slate-500">{isOperator ? 'My Entries' : 'Entries'}</h2>
-                <p className="mt-2 text-3xl font-bold">{entries.length}</p>
+                <p className="mt-2 text-3xl font-bold">{entriesTotalCount}</p>
                 <p className="mt-1 text-xs text-slate-500">
                   {isOperator ? 'Production records you have submitted' : 'Total records visible to your role'}
                 </p>
@@ -2018,7 +2030,54 @@ function App() {
             </div>
 
             <div className="card">
-              <h2 className="mb-2 text-base font-semibold">Saved Entries</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                <h2 className="text-base font-semibold">Saved Entries</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500">Filter by date:</label>
+                  <input
+                    className="input text-xs py-1 px-2 w-36"
+                    max={todayDateString()}
+                    onChange={(e) => {
+                      const d = e.target.value
+                      setEntryDateFilter(d)
+                      setEntriesPage(1)
+                      loadEntries(1, entriesLimit, d)
+                    }}
+                    type="date"
+                    value={entryDateFilter}
+                  />
+                  {entryDateFilter ? (
+                    <button
+                      className="btn-muted text-xs py-1 px-2"
+                      onClick={() => {
+                        setEntryDateFilter('')
+                        setEntriesPage(1)
+                        loadEntries(1, entriesLimit, '')
+                      }}
+                      type="button"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                  <label className="text-xs font-semibold text-slate-500 ml-2">Per page:</label>
+                  <select
+                    className="select text-xs py-1 px-2 w-20"
+                    onChange={(e) => {
+                      const lim = Number(e.target.value)
+                      setEntriesLimit(lim)
+                      setEntriesPage(1)
+                      loadEntries(1, lim, entryDateFilter)
+                    }}
+                    value={entriesLimit}
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                  </select>
+                </div>
+              </div>
+              <h2 className="sr-only">Saved Entries</h2>
               <p className="mb-3 text-sm text-slate-500">
                 {isOperator
                   ? 'Edit loads today’s entry into the form. Locked or older entries cannot be changed.'
@@ -2118,6 +2177,36 @@ function App() {
                 </table>
               </div>
 
+              {/* Desktop pagination */}
+              {entriesTotalCount > 0 ? (
+                <div className="hidden md:flex items-center justify-between mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500">
+                  <span>
+                    Showing {((entriesPage - 1) * entriesLimit) + 1}–{Math.min(entriesPage * entriesLimit, entriesTotalCount)} of {entriesTotalCount} entries
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      className="btn-muted py-1 px-2 text-xs disabled:opacity-40"
+                      disabled={entriesPage <= 1}
+                      onClick={() => { const p = entriesPage - 1; setEntriesPage(p); loadEntries(p, entriesLimit, entryDateFilter) }}
+                      type="button"
+                    >
+                      ← Prev
+                    </button>
+                    <span className="px-2 font-semibold text-slate-700 dark:text-slate-300">
+                      Page {entriesPage} / {Math.ceil(entriesTotalCount / entriesLimit) || 1}
+                    </span>
+                    <button
+                      className="btn-muted py-1 px-2 text-xs disabled:opacity-40"
+                      disabled={entriesPage >= Math.ceil(entriesTotalCount / entriesLimit)}
+                      onClick={() => { const p = entriesPage + 1; setEntriesPage(p); loadEntries(p, entriesLimit, entryDateFilter) }}
+                      type="button"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               {/* Mobile view (responsive cards) */}
               <div className="block md:hidden mt-3">
                 {entries.length === 0 ? (
@@ -2214,6 +2303,31 @@ function App() {
                   </div>
                 )}
               </div>
+
+              {/* Mobile pagination */}
+              {entriesTotalCount > 0 ? (
+                <div className="flex md:hidden items-center justify-between mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500">
+                  <button
+                    className="btn-muted py-1.5 px-3 text-xs disabled:opacity-40"
+                    disabled={entriesPage <= 1}
+                    onClick={() => { const p = entriesPage - 1; setEntriesPage(p); loadEntries(p, entriesLimit, entryDateFilter) }}
+                    type="button"
+                  >
+                    ← Prev
+                  </button>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    {entriesPage} / {Math.ceil(entriesTotalCount / entriesLimit) || 1}
+                  </span>
+                  <button
+                    className="btn-muted py-1.5 px-3 text-xs disabled:opacity-40"
+                    disabled={entriesPage >= Math.ceil(entriesTotalCount / entriesLimit)}
+                    onClick={() => { const p = entriesPage + 1; setEntriesPage(p); loadEntries(p, entriesLimit, entryDateFilter) }}
+                    type="button"
+                  >
+                    Next →
+                  </button>
+                </div>
+              ) : null}
             </div>
 
           </section>
