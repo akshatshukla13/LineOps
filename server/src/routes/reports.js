@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { ProductionEntry, MasterItem } from '../models/index.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { isValidObjectId, isValidDateString, asObjectIdOrNull } from '../utils/validators.js';
+import { isValidDateString, asObjectIdOrNull } from '../utils/validators.js';
 
 const router = Router();
 
@@ -103,6 +103,8 @@ router.get('/', authMiddleware, async (req, res) => {
       return res.json({
         type: 'monitoring',
         totalRows: 0,
+        page: 1,
+        pages: 1,
         report: [],
         spreadsheetRows: [],
         sourceCount: 0,
@@ -127,18 +129,32 @@ router.get('/', authMiddleware, async (req, res) => {
     }
   }
 
-  const entries = await ProductionEntry.find(query)
-    .populate('shiftId', 'name code')
-    .populate('lineId', 'name code')
-    .populate('machineId', 'name code')
-    .populate('processId', 'name code')
-    .populate('operatorId', 'name code')
-    .sort({ date: -1, createdAt: -1 })
-    .lean();
+  // ── Pagination ─────────────────────────────────────────────────────────────
+  const rawPage = parseInt(req.query.page, 10);
+  const rawLimit = parseInt(req.query.limit, 10);
+  const page = rawPage > 0 ? rawPage : 1;
+  const limit = rawLimit > 0 && rawLimit <= 500 ? rawLimit : 100;
+  const skip = (page - 1) * limit;
+
+  const [totalRows, entries] = await Promise.all([
+    ProductionEntry.countDocuments(query),
+    ProductionEntry.find(query)
+      .populate('shiftId', 'name code')
+      .populate('lineId', 'name code')
+      .populate('machineId', 'name code')
+      .populate('processId', 'name code')
+      .populate('operatorId', 'name code')
+      .sort({ date: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
 
   return res.json({
     type: 'monitoring',
-    totalRows: entries.length,
+    totalRows,
+    page,
+    pages: Math.ceil(totalRows / limit) || 1,
     report: entries,
     spreadsheetRows: entries.map(toMonitoringExportRow),
     sourceCount: entries.length,

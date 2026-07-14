@@ -359,6 +359,9 @@ function App() {
   const [reportApiRows, setReportApiRows] = useState([])
   const [reportSpreadsheetRows, setReportSpreadsheetRows] = useState([])
   const [reportHasRun, setReportHasRun] = useState(false)
+  const [reportPage, setReportPage] = useState(1)
+  const [reportLimit, setReportLimit] = useState(100)
+  const [reportTotalRows, setReportTotalRows] = useState(0)
   const [analyticsFilters, setAnalyticsFilters] = useState({
     from: firstDayOfMonthString(),
     to: todayDateString(),
@@ -1027,29 +1030,44 @@ function App() {
     }
   }
 
-  const runReport = async () => {
-    
+  const buildReportQuery = (page = 1, limit = reportLimit) => {
     const query = new URLSearchParams()
     query.set('type', 'monitoring')
     query.set('dateMode', reportFilters.dateMode)
-
+    query.set('page', page)
+    query.set('limit', limit)
     if (reportFilters.dateMode === 'range') {
       if (reportFilters.from) query.set('from', reportFilters.from)
       if (reportFilters.to) query.set('to', reportFilters.to)
     }
-
     if (reportFilters.lineId) query.set('lineId', reportFilters.lineId)
     if (reportFilters.machineId) query.set('machineId', reportFilters.machineId)
     if (reportFilters.processId) query.set('processId', reportFilters.processId)
     if (reportFilters.shiftId) query.set('shiftId', reportFilters.shiftId)
     if (reportFilters.operatorName.trim()) query.set('operatorName', reportFilters.operatorName.trim())
+    return query
+  }
 
+  const runReport = async (page = 1, limit = reportLimit) => {
     try {
-      const data = await authFetch(`/api/reports?${query.toString()}`)
+      const data = await authFetch(`/api/reports?${buildReportQuery(page, limit).toString()}`)
       setReportApiRows(data.report || [])
       setReportSpreadsheetRows(data.spreadsheetRows || [])
+      setReportTotalRows(data.totalRows ?? 0)
+      setReportPage(data.page ?? 1)
       setReportHasRun(true)
       showSuccess(`Loaded ${data.totalRows ?? 0} entries.`, 'Report ready')
+    } catch (error) {
+      showError(error.message)
+    }
+  }
+
+  const goToReportPage = async (page) => {
+    try {
+      const data = await authFetch(`/api/reports?${buildReportQuery(page, reportLimit).toString()}`)
+      setReportApiRows(data.report || [])
+      setReportSpreadsheetRows(data.spreadsheetRows || [])
+      setReportPage(data.page ?? page)
     } catch (error) {
       showError(error.message)
     }
@@ -1195,8 +1213,23 @@ function App() {
   }
 
   const exportReportExcel = async (rowsOverride, titleOverride) => {
-    const rowsToExport = Array.isArray(rowsOverride) ? rowsOverride : monitoringRows
+    let rowsToExport = Array.isArray(rowsOverride) ? rowsOverride : null
     const titleToExport = typeof titleOverride === 'string' ? titleOverride : reportSheetTitle
+
+    // If no override and report has multiple pages, fetch all rows for export
+    if (!rowsToExport && reportTotalRows > reportLimit) {
+      try {
+        setIsExporting(true)
+        beginRequest('Fetching all rows for export...')
+        const data = await authFetch(`/api/reports?${buildReportQuery(1, 500).toString()}`)
+        rowsToExport = (data.spreadsheetRows || []).map((row, i) => normalizeMonitoringRow(row, i))
+      } catch (err) {
+        showError(err.message)
+        return
+      }
+    } else if (!rowsToExport) {
+      rowsToExport = monitoringRows
+    }
     if (!rowsToExport.length) return
 
     try {
@@ -1275,8 +1308,23 @@ function App() {
   }
 
   const exportReportPdf = async (rowsOverride, titleOverride) => {
-    const rowsToExport = Array.isArray(rowsOverride) ? rowsOverride : monitoringRows
+    let rowsToExport = Array.isArray(rowsOverride) ? rowsOverride : null
     const titleToExport = typeof titleOverride === 'string' ? titleOverride : reportSheetTitle
+
+    // If no override and report has multiple pages, fetch all rows for export
+    if (!rowsToExport && reportTotalRows > reportLimit) {
+      try {
+        setIsExporting(true)
+        beginRequest('Fetching all rows for export...')
+        const data = await authFetch(`/api/reports?${buildReportQuery(1, 500).toString()}`)
+        rowsToExport = (data.spreadsheetRows || []).map((row, i) => normalizeMonitoringRow(row, i))
+      } catch (err) {
+        showError(err.message)
+        return
+      }
+    } else if (!rowsToExport) {
+      rowsToExport = monitoringRows
+    }
     if (!rowsToExport.length) return
     try {
       setIsExporting(true)
@@ -2435,7 +2483,8 @@ function App() {
             <div className="card">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold">
-                  Database View — {monitoringRows.length} {monitoringRows.length === 1 ? 'row' : 'rows'}
+                  Database View — {reportTotalRows} {reportTotalRows === 1 ? 'row' : 'rows'} total
+                  {reportTotalRows > reportLimit ? ` (showing page ${reportPage} of ${Math.ceil(reportTotalRows / reportLimit)})` : ''}
                 </h3>
                 <span className="text-xs text-slate-500">{reportSheetTitle}</span>
               </div>
@@ -2456,6 +2505,51 @@ function App() {
                     : 'Apply filters or open this tab to load the production database.'}
                 </div>
               )}
+
+              {/* Report pagination bar */}
+              {reportHasRun && reportTotalRows > 0 ? (
+                <div className="flex flex-wrap items-center justify-between mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 gap-3">
+                  <span className="text-xs text-slate-500">
+                    Showing {((reportPage - 1) * reportLimit) + 1}–{Math.min(reportPage * reportLimit, reportTotalRows)} of {reportTotalRows} rows
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-slate-500">Per page:</label>
+                    <select
+                      className="select text-xs py-1 px-2 w-24"
+                      onChange={(e) => {
+                        const lim = Number(e.target.value)
+                        setReportLimit(lim)
+                        runReport(1, lim)
+                      }}
+                      value={reportLimit}
+                    >
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                      <option value={200}>200</option>
+                      <option value={500}>500</option>
+                    </select>
+                    <button
+                      className="btn-muted py-1 px-2 text-xs disabled:opacity-40"
+                      disabled={reportPage <= 1}
+                      onClick={() => { const p = reportPage - 1; setReportPage(p); goToReportPage(p) }}
+                      type="button"
+                    >
+                      ← Prev
+                    </button>
+                    <span className="px-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Page {reportPage} / {Math.ceil(reportTotalRows / reportLimit) || 1}
+                    </span>
+                    <button
+                      className="btn-muted py-1 px-2 text-xs disabled:opacity-40"
+                      disabled={reportPage >= Math.ceil(reportTotalRows / reportLimit)}
+                      onClick={() => { const p = reportPage + 1; setReportPage(p); goToReportPage(p) }}
+                      type="button"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </section>
         ) : null}
