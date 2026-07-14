@@ -112,12 +112,12 @@ router.get('/', authMiddleware, async (req, res) => {
   const [total, data] = await Promise.all([
     ProductionEntry.countDocuments(query),
     ProductionEntry.find(query)
-      .populate('shiftId', 'name code')
-      .populate('lineId', 'name code')
-      .populate('machineId', 'name code')
-      .populate('processId', 'name code')
-      .populate('operatorId', 'name code')
-      .populate('createdBy', 'fullName username')
+      .populate('shiftId', '_id name code')
+      .populate('lineId', '_id name code')
+      .populate('machineId', '_id name code')
+      .populate('processId', '_id name code')
+      .populate('operatorId', '_id name code')
+      .populate('createdBy', '_id fullName username')
       .sort({ date: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit)
