@@ -86,11 +86,11 @@ router.get('/', authMiddleware, async (req, res) => {
     query.date = {};
     if (from) {
       if (!isValidDateString(from)) return res.status(400).json({ error: 'Invalid from date.' });
-      query.date.$gte = new Date(`${from}T00:00:00.000Z`);
+      query.date.$gte = from;
     }
     if (to) {
       if (!isValidDateString(to)) return res.status(400).json({ error: 'Invalid to date.' });
-      query.date.$lte = new Date(`${to}T23:59:59.999Z`);
+      query.date.$lte = to;
     }
   }
 
